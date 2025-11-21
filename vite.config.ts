@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // تحميل متغيرات البيئة من المجلد الحالي
-  // Fix: Cast process to any to avoid TS error regarding missing 'cwd' on Process type
   const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
