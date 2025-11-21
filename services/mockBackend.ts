@@ -1,24 +1,25 @@
+
 import { ODBLocation, User } from '../types';
 
 // This service mocks what your PHP/SQL backend would do.
 // In a real implementation, these functions would use fetch() to call your PHP endpoints.
 
-const STORAGE_KEY_ODB = 'odb_data_v1';
+const STORAGE_KEY_ODB = 'odb_data_v3'; // Changed key to reset data structure for string IDs
 const STORAGE_KEY_USER = 'odb_user_session';
 
 const INITIAL_MOCK_DATA: ODBLocation[] = [
-  { ODB_ID: 1, CITYNAME: 'Cairo (Downtown)', LATITUDE: 30.0444, LONGITUDE: 31.2357 },
-  { ODB_ID: 2, CITYNAME: 'Giza (Pyramids)', LATITUDE: 29.9792, LONGITUDE: 31.1342 },
-  { ODB_ID: 3, CITYNAME: 'Alexandria', LATITUDE: 31.2001, LONGITUDE: 29.9187 },
-  { ODB_ID: 4, CITYNAME: 'Sharm El Sheikh', LATITUDE: 27.9158, LONGITUDE: 34.3299 },
-  { ODB_ID: 5, CITYNAME: 'Luxor', LATITUDE: 25.6872, LONGITUDE: 32.6396 },
-  { ODB_ID: 6, CITYNAME: 'Aswan', LATITUDE: 24.0889, LONGITUDE: 32.8998 },
-  { ODB_ID: 7, CITYNAME: 'Hurghada', LATITUDE: 27.2579, LONGITUDE: 33.8116 },
-  { ODB_ID: 8, CITYNAME: 'Mansoura', LATITUDE: 31.0409, LONGITUDE: 31.3785 },
-  { ODB_ID: 9, CITYNAME: 'Tanta', LATITUDE: 30.7865, LONGITUDE: 31.0004 },
-  { ODB_ID: 10, CITYNAME: 'Ismailia', LATITUDE: 30.6043, LONGITUDE: 32.2723 },
-  { ODB_ID: 11, CITYNAME: 'Port Said', LATITUDE: 31.2653, LONGITUDE: 32.3019 },
-  { ODB_ID: 12, CITYNAME: 'Suez', LATITUDE: 29.9668, LONGITUDE: 32.5498 },
+  { id: 1, ODB_ID: "101", CITYNAME: 'Cairo (Downtown)', LATITUDE: 30.0444, LONGITUDE: 31.2357 },
+  { id: 2, ODB_ID: "GZA-01", CITYNAME: 'Giza (Pyramids)', LATITUDE: 29.9792, LONGITUDE: 31.1342 },
+  { id: 3, ODB_ID: "ALX_ZN1", CITYNAME: 'Alexandria', LATITUDE: 31.2001, LONGITUDE: 29.9187 },
+  { id: 4, ODB_ID: "SHARM-100", CITYNAME: 'Sharm El Sheikh', LATITUDE: 27.9158, LONGITUDE: 34.3299 },
+  { id: 5, ODB_ID: "LUX-TEMPLE", CITYNAME: 'Luxor', LATITUDE: 25.6872, LONGITUDE: 32.6396 },
+  { id: 6, ODB_ID: "ASW-HIGH", CITYNAME: 'Aswan', LATITUDE: 24.0889, LONGITUDE: 32.8998 },
+  { id: 7, ODB_ID: "HRG-RED", CITYNAME: 'Hurghada', LATITUDE: 27.2579, LONGITUDE: 33.8116 },
+  { id: 8, ODB_ID: "108-B", CITYNAME: 'Mansoura', LATITUDE: 31.0409, LONGITUDE: 31.3785 },
+  { id: 9, ODB_ID: "TNT-09", CITYNAME: 'Tanta', LATITUDE: 30.7865, LONGITUDE: 31.0004 },
+  { id: 10, ODB_ID: "ISM-CANAL", CITYNAME: 'Ismailia', LATITUDE: 30.6043, LONGITUDE: 32.2723 },
+  { id: 11, ODB_ID: "PTS-PORT", CITYNAME: 'Port Said', LATITUDE: 31.2653, LONGITUDE: 32.3019 },
+  { id: 12, ODB_ID: "SUEZ-01", CITYNAME: 'Suez', LATITUDE: 29.9668, LONGITUDE: 32.5498 },
 ];
 
 export const mockLogin = async (username: string, password: string): Promise<User> => {
@@ -59,14 +60,17 @@ export const getODBLocations = (): ODBLocation[] => {
 
 export const saveODBLocation = (location: ODBLocation) => {
   const current = getODBLocations();
-  const existingIndex = current.findIndex(l => l.ODB_ID === location.ODB_ID);
+  // Check if updating existing record based on internal ID
+  const existingIndex = current.findIndex(l => l.id === location.id);
   
   if (existingIndex >= 0) {
     current[existingIndex] = location;
   } else {
-    // Generate ID if new (simple max+1 logic)
-    const maxId = current.reduce((max, item) => (item.ODB_ID > max ? item.ODB_ID : max), 0);
-    location.ODB_ID = maxId + 1;
+    // New Record
+    // Generate Internal ID (Automatic & Unique)
+    const maxId = current.reduce((max, item) => (item.id > max ? item.id : max), 0);
+    location.id = maxId + 1;
+    // NOTE: location.ODB_ID comes from the form input
     current.push(location);
   }
   
@@ -74,9 +78,28 @@ export const saveODBLocation = (location: ODBLocation) => {
   return current;
 };
 
+// Bulk save for importing large files
+export const saveBulkODBLocations = (locations: Omit<ODBLocation, 'id'>[]) => {
+  const current = getODBLocations();
+  let maxId = current.reduce((max, item) => (item.id > max ? item.id : max), 0);
+  
+  const newEntries = locations.map((loc) => {
+    maxId++;
+    return {
+      ...loc,
+      id: maxId
+    } as ODBLocation;
+  });
+
+  const updatedList = [...current, ...newEntries];
+  localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(updatedList));
+  return updatedList;
+};
+
 export const deleteODBLocation = (id: number) => {
   let current = getODBLocations();
-  current = current.filter(l => l.ODB_ID !== id);
+  // Delete by internal ID
+  current = current.filter(l => l.id !== id);
   localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(current));
   return current;
 };

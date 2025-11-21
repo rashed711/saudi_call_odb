@@ -1,3 +1,4 @@
+
 export interface User {
   id: number;
   username: string;
@@ -7,7 +8,8 @@ export interface User {
 }
 
 export interface ODBLocation {
-  ODB_ID: number;
+  id: number; // System internal ID (Auto-increment, Unique)
+  ODB_ID: string; // Business Logic ID (Alphanumeric & Symbols)
   CITYNAME: string;
   LATITUDE: number;
   LONGITUDE: number;

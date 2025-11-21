@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import ODBTable from './components/ODBTable';
@@ -46,29 +47,35 @@ const App: React.FC = () => {
       case View.DASHBOARD:
       default:
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            <div onClick={() => setCurrentView(View.SETTINGS_ODB)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200">
-              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4">
-                <Icons.Settings />
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
+            <div onClick={() => setCurrentView(View.SETTINGS_ODB)} className="cursor-pointer bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200 flex flex-col justify-between h-full">
+              <div>
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-3 md:mb-4">
+                  <Icons.Settings />
+                </div>
+                <h3 className="text-base md:text-xl font-bold text-gray-800">إدارة ODB</h3>
+                <p className="text-gray-500 mt-1 md:mt-2 text-xs md:text-sm line-clamp-2">عرض وتعديل وحذف بيانات المواقع الجغرافية.</p>
               </div>
-              <h3 className="text-xl font-bold text-gray-800">إدارة ODB</h3>
-              <p className="text-gray-500 mt-2 text-sm">عرض وتعديل وحذف بيانات المواقع الجغرافية.</p>
             </div>
 
-            <div onClick={() => setCurrentView(View.NEARBY)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200">
-              <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-4">
-                <Icons.MapPin />
+            <div onClick={() => setCurrentView(View.NEARBY)} className="cursor-pointer bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200 flex flex-col justify-between h-full">
+              <div>
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-3 md:mb-4">
+                  <Icons.MapPin />
+                </div>
+                <h3 className="text-base md:text-xl font-bold text-gray-800">الأماكن القريبة</h3>
+                <p className="text-gray-500 mt-1 md:mt-2 text-xs md:text-sm line-clamp-2">استعراض أقرب 20 نقطة لموقعك الحالي.</p>
               </div>
-              <h3 className="text-xl font-bold text-gray-800">الأماكن القريبة</h3>
-              <p className="text-gray-500 mt-2 text-sm">استعراض أقرب 20 نقطة لموقعك الحالي.</p>
             </div>
 
-            <div onClick={() => setCurrentView(View.PROFILE)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200">
-              <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-4">
-                <Icons.User />
+            <div onClick={() => setCurrentView(View.PROFILE)} className="cursor-pointer bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200 flex flex-col justify-between h-full">
+              <div>
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-3 md:mb-4">
+                  <Icons.User />
+                </div>
+                <h3 className="text-base md:text-xl font-bold text-gray-800">الملف الشخصي</h3>
+                <p className="text-gray-500 mt-1 md:mt-2 text-xs md:text-sm line-clamp-2">عرض بيانات حسابك والصلاحيات.</p>
               </div>
-              <h3 className="text-xl font-bold text-gray-800">الملف الشخصي</h3>
-              <p className="text-gray-500 mt-2 text-sm">عرض بيانات حسابك والصلاحيات.</p>
             </div>
           </div>
         );
