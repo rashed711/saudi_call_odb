@@ -16,9 +16,6 @@ const App: React.FC = () => {
     const session = getSession();
     if (session) {
       setUser(session);
-    } else {
-        // If no session, ensure we show login view
-       // In a real app, you might check a token validation API here
     }
   }, []);
 
@@ -49,8 +46,8 @@ const App: React.FC = () => {
       case View.DASHBOARD:
       default:
         return (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div onClick={() => setCurrentView(View.SETTINGS_ODB)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            <div onClick={() => setCurrentView(View.SETTINGS_ODB)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200">
               <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4">
                 <Icons.Settings />
               </div>
@@ -58,7 +55,7 @@ const App: React.FC = () => {
               <p className="text-gray-500 mt-2 text-sm">عرض وتعديل وحذف بيانات المواقع الجغرافية.</p>
             </div>
 
-            <div onClick={() => setCurrentView(View.NEARBY)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+            <div onClick={() => setCurrentView(View.NEARBY)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200">
               <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-4">
                 <Icons.MapPin />
               </div>
@@ -66,7 +63,7 @@ const App: React.FC = () => {
               <p className="text-gray-500 mt-2 text-sm">استعراض أقرب 20 نقطة لموقعك الحالي.</p>
             </div>
 
-            <div onClick={() => setCurrentView(View.PROFILE)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+            <div onClick={() => setCurrentView(View.PROFILE)} className="cursor-pointer bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95 transform duration-200">
               <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-4">
                 <Icons.User />
               </div>
@@ -79,28 +76,32 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 font-sans">
+    <div className="flex min-h-screen bg-gray-50 font-sans overflow-hidden">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-            className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden"
+            className="fixed inset-0 z-40 bg-black bg-opacity-50 backdrop-blur-sm md:hidden transition-opacity"
             onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:static inset-y-0 right-0 z-50 w-64 bg-secondary text-white transform transition-transform duration-300 ease-in-out
+        fixed md:static inset-y-0 right-0 z-50 w-64 bg-secondary text-white transform transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
         ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
       `}>
-        <div className="p-6 border-b border-gray-700">
-          <h1 className="text-2xl font-bold tracking-wider text-center">ODB<span className="text-accent">Manager</span></h1>
+        <div className="p-6 border-b border-gray-700 flex justify-between items-center">
+          <h1 className="text-2xl font-bold tracking-wider">ODB<span className="text-accent">Manager</span></h1>
+          {/* Close button for mobile */}
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden text-gray-400 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
         
-        <nav className="mt-6 px-4 space-y-2">
+        <nav className="mt-6 px-4 space-y-2 overflow-y-auto h-[calc(100vh-180px)]">
           <button
             onClick={() => { setCurrentView(View.DASHBOARD); setSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.DASHBOARD ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.DASHBOARD ? 'bg-primary text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700'}`}
           >
             <Icons.Dashboard />
             <span>لوحة التحكم</span>
@@ -110,7 +111,7 @@ const App: React.FC = () => {
 
           <button
             onClick={() => { setCurrentView(View.SETTINGS_ODB); setSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.SETTINGS_ODB ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.SETTINGS_ODB ? 'bg-primary text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700'}`}
           >
             <Icons.Settings />
             <span>إعدادات ODB</span>
@@ -118,7 +119,7 @@ const App: React.FC = () => {
           
           <button
             onClick={() => { setCurrentView(View.NEARBY); setSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.NEARBY ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.NEARBY ? 'bg-primary text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700'}`}
           >
             <Icons.MapPin />
             <span>الأماكن القريبة</span>
@@ -128,17 +129,17 @@ const App: React.FC = () => {
 
           <button
             onClick={() => { setCurrentView(View.PROFILE); setSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.PROFILE ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentView === View.PROFILE ? 'bg-primary text-white shadow-lg' : 'text-gray-300 hover:bg-gray-700'}`}
           >
             <Icons.User />
             <span>الملف الشخصي</span>
           </button>
         </nav>
 
-        <div className="absolute bottom-0 w-full p-4 border-t border-gray-700">
+        <div className="absolute bottom-0 w-full p-4 border-t border-gray-700 bg-secondary">
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 py-2 transition-colors"
+            className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 py-2 transition-colors hover:bg-red-900/20 rounded-lg"
           >
             <Icons.LogOut />
             <span>تسجيل خروج</span>
@@ -147,14 +148,17 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-gray-50 w-full relative">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden text-gray-600">
+        <header className="bg-white border-b border-gray-200 min-h-[64px] flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 w-full shadow-sm">
+          <div className="flex items-center gap-3">
+            <button 
+                onClick={() => setSidebarOpen(true)} 
+                className="md:hidden text-gray-600 p-2 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            >
                 <Icons.Menu />
             </button>
-            <h2 className="text-xl font-semibold text-gray-800">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-800 truncate max-w-[200px] md:max-w-none">
                 {currentView === View.DASHBOARD && 'الرئيسية'}
                 {currentView === View.SETTINGS_ODB && 'الإعدادات / ODB'}
                 {currentView === View.NEARBY && 'البحث الجغرافي'}
@@ -163,18 +167,20 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            <div className="hidden md:block text-sm text-gray-600">
+            <div className="hidden sm:block text-sm text-gray-600">
                 مرحباً، <span className="font-bold text-gray-900">{user.name}</span>
             </div>
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-xs font-bold">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-primary rounded-full flex items-center justify-center text-white text-xs md:text-sm font-bold shadow-md ring-2 ring-blue-100">
                 {user.username.substring(0, 2).toUpperCase()}
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <div className="flex-1 p-4 md:p-8 overflow-auto">
-            {renderContent()}
+        {/* Page Content Container */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 w-full pb-20 md:pb-8">
+            <div className="max-w-7xl mx-auto">
+                {renderContent()}
+            </div>
         </div>
       </main>
     </div>
