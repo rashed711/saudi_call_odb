@@ -58,6 +58,17 @@ const MyActivity: React.FC<Props> = ({ user }) => {
         }
     };
 
+    const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData(prev => ({ ...prev, image: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.CITYNAME) return;
@@ -216,15 +227,38 @@ const MyActivity: React.FC<Props> = ({ user }) => {
             {/* EDIT MODAL */}
             {isEditing && (
                 <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md rounded-2xl p-6 animate-in zoom-in-95 shadow-2xl">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                    <div className="bg-white w-full max-w-md rounded-2xl p-6 animate-in zoom-in-95 shadow-2xl flex flex-col max-h-[90vh]">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2 shrink-0">
                             <Icons.Edit /> تعديل البيانات
                         </h3>
-                        <form onSubmit={handleSave} className="space-y-4">
+                        <form onSubmit={handleSave} className="space-y-4 overflow-y-auto p-1">
                              <div className="bg-blue-50 p-3 rounded-lg mb-2 text-sm flex justify-between border border-blue-100 text-blue-800">
                                 <span className="font-bold">{formData.CITYNAME}</span>
                                 <span className="font-mono">{formData.ODB_ID}</span>
                              </div>
+                             
+                             {/* Image Edit Section */}
+                             <div>
+                                <label className="text-xs font-bold text-gray-500 block mb-2">صورة الموقع</label>
+                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 hover:border-primary transition-colors relative overflow-hidden group bg-gray-50">
+                                    {formData.image ? (
+                                        <>
+                                            <img src={formData.image} className="w-full h-full object-cover opacity-70 group-hover:opacity-40 transition-opacity" />
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Icons.Camera />
+                                                <span className="text-xs font-bold mt-1">تغيير الصورة</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center text-gray-400">
+                                            <Icons.Camera />
+                                            <span className="text-xs font-bold mt-1">إضافة صورة</span>
+                                        </div>
+                                    )}
+                                    <input type="file" accept="image/*" onChange={handleImageCapture} className="hidden" />
+                                </label>
+                             </div>
+
                              <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-gray-500">خط العرض (Lat)</label>

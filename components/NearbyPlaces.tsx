@@ -78,7 +78,13 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
             settings.searchRadius, 
             settings.maxResults
         );
-        setNearbyPlaces(places);
+
+        // Filter duplicates based on ODB_ID to prevent multiple occurrences
+        const uniquePlaces = places.filter((place, index, self) => 
+            index === self.findIndex((t) => t.ODB_ID === place.ODB_ID)
+        );
+
+        setNearbyPlaces(uniquePlaces);
         setStatus('success');
     } catch (e: any) {
         console.error(e);
