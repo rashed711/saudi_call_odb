@@ -153,7 +153,8 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
         LONGITUDE: Number(formData.LONGITUDE),
         image: formData.image,
         notes: formData.notes,
-        lastEditedBy: user.name,
+        // CHANGED: Use username instead of name to be consistent with MyActivity filtering
+        lastEditedBy: user.username,
         lastEditedAt: now.toISOString(),
     };
 

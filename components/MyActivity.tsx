@@ -22,12 +22,13 @@ const MyActivity: React.FC<Props> = ({ user }) => {
 
     useEffect(() => {
         loadActivity();
-    }, [user.id]);
+    }, [user.id, user.username]);
 
     const loadActivity = async () => {
         setLoading(true);
         try {
-            const searchTerm = user.name || user.username;
+            // CHANGED: Filter by username (stable ID) instead of display name
+            const searchTerm = user.username;
             const res = await getMyActivity(searchTerm);
             setLocations(res.data);
         } catch (e) {
@@ -76,7 +77,8 @@ const MyActivity: React.FC<Props> = ({ user }) => {
         const updated: ODBLocation = {
             ...selectedLoc!,
             ...formData as ODBLocation,
-            lastEditedBy: user.name,
+            // CHANGED: Save using username to maintain consistency
+            lastEditedBy: user.username,
             lastEditedAt: new Date().toISOString()
         };
 
@@ -93,7 +95,7 @@ const MyActivity: React.FC<Props> = ({ user }) => {
                         <Icons.Check />
                         <span>نشاطي الميداني</span>
                     </h2>
-                    <p className="text-xs md:text-sm text-gray-500">المواقع التي قمت بإضافتها أو تعديلها ({user.name})</p>
+                    <p className="text-xs md:text-sm text-gray-500">المواقع المسجلة باسم المستخدم (@{user.username})</p>
                 </div>
                 <div className="text-xl font-bold text-primary bg-blue-50 px-3 py-1 rounded-lg">
                     {locations.length}
@@ -114,7 +116,7 @@ const MyActivity: React.FC<Props> = ({ user }) => {
                             {loading ? (
                                 <tr><td colSpan={3} className="text-center py-8">...</td></tr>
                             ) : locations.length === 0 ? (
-                                <tr><td colSpan={3} className="text-center py-12 text-gray-400 text-sm">لم يتم العثور على نشاط مسجل باسم "{user.name}"</td></tr>
+                                <tr><td colSpan={3} className="text-center py-12 text-gray-400 text-sm">لم يتم العثور على نشاط مسجل باسم المستخدم "{user.username}"</td></tr>
                             ) : locations.map(loc => (
                                 <tr key={loc.id} onClick={() => handleView(loc)} className="hover:bg-gray-50 cursor-pointer transition-colors">
                                     <td className="px-4 py-3 md:px-6">

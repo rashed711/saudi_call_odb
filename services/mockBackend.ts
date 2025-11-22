@@ -174,10 +174,11 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
 };
 
 // NEW: Get My Activity (Filtered by username/editor)
-// Accepts a search term which can be the User Name or Username
-export const getMyActivity = async (searchTerm: string, page: number = 1, limit: number = 20): Promise<{data: ODBLocation[], total: number}> => {
+// Accepts a search term which is now expected to be the User ID or Username
+export const getMyActivity = async (username: string, page: number = 1, limit: number = 20): Promise<{data: ODBLocation[], total: number}> => {
     // The backend 'get_locations_paginated' endpoint searches in 'last_edited_by' as well
-    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(searchTerm)}`, 'GET');
+    // We pass the username to filter by who edited/created it.
+    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(username)}`, 'GET');
     
     const mappedData = result.data.map((loc: any) => ({
         ...loc,

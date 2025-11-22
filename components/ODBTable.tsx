@@ -119,7 +119,8 @@ const ODBTable: React.FC = () => {
       LONGITUDE: Number(formData.LONGITUDE),
       image: formData.image,
       notes: formData.notes,
-      lastEditedBy: user?.name || 'Unknown',
+      // CHANGED: Use username instead of name to be consistent with MyActivity filtering
+      lastEditedBy: user?.username || 'Unknown',
       lastEditedAt: now.toISOString()
     };
 
