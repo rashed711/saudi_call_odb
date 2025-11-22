@@ -350,21 +350,19 @@ const ODBTable: React.FC = () => {
           <div className="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl md:max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-10 duration-300">
             
             {/* Modal Header */}
-            <div className="bg-white px-4 py-3 border-b border-gray-100 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+            <div className="bg-white px-4 py-3 border-b border-gray-100 flex items-center justify-between sticky top-0 z-10 shadow-sm shrink-0">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-500 p-2 -ml-2 hover:bg-gray-50 rounded-full">
                     <span className="text-sm font-bold">إلغاء</span>
                 </button>
                 <h3 className="font-bold text-lg text-gray-800">{formData.id ? 'تعديل الموقع' : 'إضافة جديد'}</h3>
-                <button form="locationForm" type="submit" className="text-primary font-bold text-sm p-2 -mr-2 hover:bg-blue-50 rounded-full">
-                    حفظ
-                </button>
+                <div className="w-8"></div> {/* Spacer */}
             </div>
 
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
-                <form id="locationForm" onSubmit={handleSave} className="space-y-5">
+                <form id="locationForm" onSubmit={handleSave} className="space-y-4">
                     
-                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">اسم المدينة</label>
                             <input
@@ -376,7 +374,7 @@ const ODBTable: React.FC = () => {
                             placeholder="اكتب الاسم هنا"
                             />
                         </div>
-                        <div className="border-t border-gray-100 pt-4">
+                        <div className="border-t border-gray-100 pt-3">
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">كود ODB</label>
                             <input
                             type="text"
@@ -394,64 +392,55 @@ const ODBTable: React.FC = () => {
                             <Icons.MapPin />
                             الإحداثيات
                         </h4>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Latitude</label>
+                                <label className="block text-[10px] font-bold text-gray-500 mb-1">Latitude</label>
                                 <input
                                 type="number" step="any" required
                                 value={formData.LATITUDE}
                                 onChange={(e) => setFormData({ ...formData, LATITUDE: parseFloat(e.target.value) })}
-                                className="w-full p-3 bg-gray-50 rounded-xl font-mono text-center text-sm focus:ring-2 focus:ring-primary outline-none"
+                                className="w-full p-2.5 bg-gray-50 rounded-xl font-mono text-center text-sm focus:ring-2 focus:ring-primary outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Longitude</label>
+                                <label className="block text-[10px] font-bold text-gray-500 mb-1">Longitude</label>
                                 <input
                                 type="number" step="any" required
                                 value={formData.LONGITUDE}
                                 onChange={(e) => setFormData({ ...formData, LONGITUDE: parseFloat(e.target.value) })}
-                                className="w-full p-3 bg-gray-50 rounded-xl font-mono text-center text-sm focus:ring-2 focus:ring-primary outline-none"
+                                className="w-full p-2.5 bg-gray-50 rounded-xl font-mono text-center text-sm focus:ring-2 focus:ring-primary outline-none"
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <label className="flex justify-between items-center text-xs font-bold text-gray-400 uppercase mb-3">
-                            <span>الصورة</span>
-                            <Icons.Camera />
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                         <label className="w-20 h-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 cursor-pointer active:bg-gray-100 transition-colors shrink-0 relative overflow-hidden">
+                            {formData.image ? <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <Icons.Camera />}
+                            <span className="text-[8px] mt-1 font-bold relative z-10">{formData.image ? 'تغيير' : 'صورة'}</span>
+                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageCapture} />
                         </label>
-                        
-                        <div className="flex items-center gap-4">
-                            <label className="w-20 h-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 cursor-pointer active:bg-gray-100 transition-colors">
-                                <Icons.Plus />
-                                <span className="text-[10px] mt-1">إضافة</span>
-                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageCapture} />
-                            </label>
-                            
-                            {formData.image && (
-                                <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shadow-sm group">
-                                    <img src={formData.image} className="w-full h-full object-cover" onClick={() => setZoomedImage(formData.image!)} />
-                                    <button type="button" onClick={() => setFormData({...formData, image: ''})} className="absolute top-0 right-0 bg-red-500 text-white p-1 shadow-sm rounded-bl-lg">
-                                        <Icons.X />
-                                    </button>
-                                </div>
-                            )}
+                        <div className="flex-1">
+                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ملاحظات</label>
+                            <textarea
+                                value={formData.notes || ''}
+                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                className="w-full p-2 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all h-20 resize-none text-sm"
+                                placeholder="..."
+                            ></textarea>
                         </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">ملاحظات</label>
-                        <textarea
-                            value={formData.notes || ''}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="w-full p-3 bg-gray-50 border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all min-h-[100px]"
-                            placeholder="أضف أي تفاصيل إضافية..."
-                        ></textarea>
                     </div>
 
                 </form>
             </div>
+            
+             {/* Footer Action Button */}
+             <div className="p-4 bg-white border-t border-gray-100 shrink-0 pb-safe">
+                <button form="locationForm" type="submit" className="w-full bg-primary text-white font-bold text-lg py-3.5 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-transform">
+                    حفظ البيانات
+                </button>
+            </div>
+
           </div>
         </div>
       )}

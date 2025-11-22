@@ -160,13 +160,10 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       if (!isoString) return null;
       try {
           return new Intl.DateTimeFormat('ar-EG', {
-              weekday: 'long',
-              year: 'numeric',
               month: 'short',
               day: 'numeric',
               hour: 'numeric',
               minute: 'numeric',
-              hour12: true
           }).format(new Date(isoString));
       } catch (e) {
           return isoString;
@@ -265,230 +262,178 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
          </div>
        )}
 
-      {/* Redesigned Detail Modal */}
+      {/* Redesigned Details Modal - Compact & Fixed Actions */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-md transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
           
-          {/* Modal Content */}
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 border border-gray-100">
+          {/* Modal Content - Bottom Sheet on Mobile, Card on Desktop */}
+          <div className="relative bg-white rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[95vh] md:max-h-[85vh] animate-in slide-in-from-bottom-full duration-300">
             
-            {/* Standard Header */}
-            <div className="bg-white border-b border-gray-100 p-4 flex justify-between items-center sticky top-0 z-10">
-                <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
-                        <Icons.MapPin />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-gray-800 text-lg leading-none">{formData.CITYNAME}</h3>
-                        <span className="text-xs text-gray-400 font-mono mt-1 block">{formData.ODB_ID}</span>
-                    </div>
+            {/* Header - Compact */}
+            <div className="bg-white border-b border-gray-100 px-4 py-3 flex justify-between items-center sticky top-0 z-10 shrink-0">
+                <div className="flex flex-col">
+                    <h3 className="font-bold text-gray-800 text-base leading-tight truncate max-w-[200px]">{formData.CITYNAME}</h3>
+                    <span className="text-[10px] text-gray-400 font-mono">{formData.ODB_ID}</span>
                 </div>
-                <div className="flex gap-2">
-                    {!isEditing && (
-                        <button 
-                            onClick={() => setIsEditing(true)}
-                            className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
-                        >
-                            <Icons.Edit />
-                            <span>تعديل</span>
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => setIsModalOpen(false)}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                        <Icons.X />
-                    </button>
-                </div>
+                <button 
+                    onClick={() => setIsModalOpen(false)}
+                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                    <Icons.X />
+                </button>
             </div>
 
-            {/* Content Body */}
-            <div className="p-5 overflow-y-auto flex-1">
+            {/* Content Body - Scrollable but minimal */}
+            <div className="p-4 overflow-y-auto flex-1 overscroll-contain">
                 {!isEditing ? (
-                    // ================= VIEW MODE =================
-                    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    // ================= VIEW MODE (Compact) =================
+                    <div className="flex flex-col h-full">
                         
-                        {/* 1. Lat/Long Grid */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center hover:bg-gray-100 transition-colors">
-                                <span className="block text-xs text-gray-400 mb-1 font-medium">خط العرض</span>
-                                <span className="font-mono font-bold text-gray-700 text-sm" dir="ltr">{formData.LATITUDE}</span>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center hover:bg-gray-100 transition-colors">
-                                <span className="block text-xs text-gray-400 mb-1 font-medium">خط الطول</span>
-                                <span className="font-mono font-bold text-gray-700 text-sm" dir="ltr">{formData.LONGITUDE}</span>
-                            </div>
-                        </div>
-
-                        {/* 2. Image Display (Moved Below Coords) */}
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-2">صورة الموقع</label>
+                        {/* Top Section: Image & Coords Row */}
+                        <div className="flex gap-3 mb-4">
+                            {/* Image Thumbnail */}
                             <div 
-                                className="relative w-full h-48 bg-gray-100 rounded-xl overflow-hidden border border-gray-200 group cursor-pointer"
+                                className="w-24 h-24 bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shrink-0 relative group"
                                 onClick={() => formData.image && setZoomedImage(formData.image)}
                             >
                                 {formData.image ? (
-                                    <>
-                                        <img 
-                                            src={formData.image} 
-                                            alt="Location" 
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                            <div className="opacity-0 group-hover:opacity-100 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm transition-opacity flex items-center gap-1">
-                                                <Icons.Search />
-                                                تكبير
-                                            </div>
-                                        </div>
-                                    </>
+                                    <img 
+                                        src={formData.image} 
+                                        alt="Location" 
+                                        className="w-full h-full object-cover"
+                                    />
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                    <div className="w-full h-full flex items-center justify-center text-gray-300">
                                         <Icons.MapPin />
-                                        <span className="text-xs mt-2">لا توجد صورة</span>
+                                    </div>
+                                )}
+                                {formData.image && <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 text-white text-xs"><Icons.Search /></div>}
+                            </div>
+
+                            {/* Coords & Metadata */}
+                            <div className="flex-1 flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 text-center">
+                                        <span className="block text-[9px] text-gray-400 uppercase">LAT</span>
+                                        <span className="font-mono font-bold text-gray-700 text-xs" dir="ltr">{formData.LATITUDE?.toFixed(5)}</span>
+                                    </div>
+                                    <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 text-center">
+                                        <span className="block text-[9px] text-gray-400 uppercase">LONG</span>
+                                        <span className="font-mono font-bold text-gray-700 text-xs" dir="ltr">{formData.LONGITUDE?.toFixed(5)}</span>
+                                    </div>
+                                </div>
+                                
+                                {(formData.lastEditedBy) && (
+                                    <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5 text-[10px] text-blue-800">
+                                        <Icons.User />
+                                        <div className="flex flex-col leading-none">
+                                            <span className="font-bold">{formData.lastEditedBy}</span>
+                                            <span className="opacity-70 scale-90 origin-right">{formatDate(formData.lastEditedAt)}</span>
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* 3. Notes */}
-                        {formData.notes ? (
-                            <div className="bg-yellow-50/80 border border-yellow-100 rounded-xl p-4 relative">
-                                <span className="absolute -top-2 right-3 bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold">ملاحظات</span>
-                                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">{formData.notes}</p>
+                        {/* Middle Section: Notes (Flexible Height) */}
+                        <div className="flex-1 min-h-0">
+                            <label className="block text-xs font-bold text-gray-500 mb-1">الملاحظات</label>
+                            <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed border border-gray-100 h-full max-h-[150px] md:max-h-[200px] overflow-y-auto">
+                                {formData.notes ? formData.notes : <span className="text-gray-400 italic text-xs">لا توجد ملاحظات مسجلة لهذا الموقع.</span>}
                             </div>
-                        ) : (
-                            <div className="text-center py-4 text-gray-400 text-sm italic bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                                لا توجد ملاحظات مسجلة
-                            </div>
-                        )}
+                        </div>
 
-                        {/* 4. Directions Button */}
-                        <button 
-                            onClick={handleGetDirections}
-                            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white py-3.5 px-4 rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center justify-center gap-2 transition-all active:scale-95 group"
-                        >
-                            <span className="group-hover:-translate-x-1 transition-transform bg-white/20 p-1 rounded-full">
-                                <Icons.Navigation />
-                            </span>
-                            <span>الذهاب للموقع (Maps)</span>
-                        </button>
-
-                        {/* Audit Info */}
-                        {(formData.lastEditedBy || formData.lastEditedAt) && (
-                            <div className="border-t border-gray-100 pt-4 mt-2">
-                                <div className="flex items-center gap-2 text-xs text-gray-400 justify-center bg-gray-50 py-2 rounded-lg">
-                                    <Icons.Edit />
-                                    <span>آخر تعديل بواسطة:</span>
-                                    <span className="font-bold text-gray-600">{formData.lastEditedBy || 'غير معروف'}</span>
-                                    {formData.lastEditedAt && (
-                                        <>
-                                            <span className="mx-1">•</span>
-                                            <span>{formatDate(formData.lastEditedAt)}</span>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 ) : (
-                    // ================= EDIT MODE =================
-                    <form onSubmit={handleSave} className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    // ================= EDIT MODE (Compact) =================
+                    <form id="editForm" onSubmit={handleSave} className="flex flex-col gap-3 h-full">
                          
-                         {/* 1. Coordinates Grid */}
-                        <div className="grid grid-cols-2 gap-3">
+                         {/* Compact Edit Grid */}
+                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">خط العرض (Lat)</label>
+                                <label className="block text-[10px] font-bold text-gray-500 mb-1">خط العرض (Lat)</label>
                                 <input
-                                    type="number"
-                                    step="any"
-                                    required
+                                    type="number" step="any" required
                                     value={formData.LATITUDE}
                                     onChange={(e) => setFormData({ ...formData, LATITUDE: parseFloat(e.target.value) })}
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono text-center"
+                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-center focus:bg-white focus:ring-1 focus:ring-primary outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">خط الطول (Long)</label>
+                                <label className="block text-[10px] font-bold text-gray-500 mb-1">خط الطول (Long)</label>
                                 <input
-                                    type="number"
-                                    step="any"
-                                    required
+                                    type="number" step="any" required
                                     value={formData.LONGITUDE}
                                     onChange={(e) => setFormData({ ...formData, LONGITUDE: parseFloat(e.target.value) })}
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono text-center"
+                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-center focus:bg-white focus:ring-1 focus:ring-primary outline-none"
                                 />
                             </div>
-                        </div>
+                         </div>
 
-                         {/* 2. Image Update (Moved Below Coords) */}
-                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 mb-2">
-                                <Icons.Camera />
-                                <span>تحديث الصورة</span>
+                         <div className="flex gap-3">
+                            {/* Small Image Upload */}
+                            <label className="w-20 h-20 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 cursor-pointer active:bg-blue-50 hover:bg-gray-100 relative overflow-hidden shrink-0">
+                                {formData.image ? <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <Icons.Camera />}
+                                <span className="text-[8px] font-bold mt-1 relative z-10">{formData.image ? 'تغيير' : 'صورة'}</span>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleImageCapture} />
                             </label>
-                            <div className="flex gap-3 items-center">
-                                <label className="flex-1 flex flex-col items-center justify-center h-32 bg-white border-2 border-dashed border-purple-200 rounded-lg cursor-pointer hover:bg-purple-50 transition-colors relative overflow-hidden">
-                                    {formData.image ? (
-                                        <img src={formData.image} alt="New" className="absolute inset-0 w-full h-full object-cover opacity-50" />
-                                    ) : null}
-                                    <div className="relative z-10 flex flex-col items-center">
-                                        <Icons.Upload />
-                                        <span className="text-[10px] font-bold text-purple-600 mt-1">التقط أو اختر صورة</span>
-                                    </div>
-                                    <input 
-                                        type="file" 
-                                        accept="image/*" 
-                                        capture="environment" 
-                                        className="hidden" 
-                                        onChange={handleImageCapture}
-                                    />
-                                </label>
-                                {formData.image && (
-                                    <button 
-                                        type="button"
-                                        onClick={() => setFormData({...formData, image: ''})}
-                                        className="h-32 w-12 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 flex items-center justify-center transition-colors"
-                                        title="حذف الصورة"
-                                    >
-                                        <Icons.Trash />
-                                    </button>
-                                )}
+                            
+                            {/* Notes Input */}
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-gray-500 mb-1">تعديل الملاحظات</label>
+                                <textarea
+                                    value={formData.notes || ''}
+                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs h-20 focus:bg-white focus:ring-1 focus:ring-primary outline-none resize-none"
+                                    placeholder="اكتب ملاحظاتك هنا..."
+                                ></textarea>
                             </div>
-                        </div>
-
-                        {/* 3. Notes Input */}
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 mb-1">ملاحظات</label>
-                            <textarea
-                                value={formData.notes || ''}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-sm min-h-[80px]"
-                                placeholder="اكتب ملاحظاتك هنا..."
-                            ></textarea>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-3 pt-2 sticky bottom-0 bg-white pb-2">
-                             <button
-                                type="button"
-                                onClick={() => setIsEditing(false)}
-                                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl transition-colors font-bold text-sm"
-                            >
-                                إلغاء
-                            </button>
-                            <button
-                                type="submit"
-                                className="flex-[2] bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-xl font-bold transition-colors shadow-lg text-sm flex items-center justify-center gap-2"
-                            >
-                                <span>حفظ التغييرات</span>
-                                <Icons.Edit />
-                            </button>
-                        </div>
+                         </div>
                     </form>
                 )}
             </div>
+
+            {/* Footer Actions - Always Fixed & Visible */}
+            <div className="p-3 border-t border-gray-100 bg-gray-50/80 backdrop-blur-sm shrink-0 pb-safe">
+                {!isEditing ? (
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleGetDirections}
+                            className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
+                        >
+                            <Icons.Navigation />
+                            <span>توجيه (Google Maps)</span>
+                        </button>
+                        <button 
+                            onClick={() => setIsEditing(true)}
+                            className="w-12 bg-white border border-gray-200 text-gray-700 rounded-xl flex items-center justify-center shadow-sm active:scale-95 transition-all"
+                        >
+                            <Icons.Edit />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex gap-2">
+                         <button
+                            type="button"
+                            onClick={() => setIsEditing(false)}
+                            className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm"
+                        >
+                            إلغاء
+                        </button>
+                        <button
+                            type="submit"
+                            form="editForm"
+                            className="flex-[2] bg-gray-900 text-white py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <span>حفظ التعديلات</span>
+                            <Icons.Check />
+                        </button>
+                    </div>
+                )}
+            </div>
+
           </div>
         </div>
       )}
@@ -498,7 +443,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
           <div className="fixed inset-0 z-50 bg-black bg-opacity-95 flex flex-col items-center justify-center p-2 animate-in fade-in duration-200">
               <button 
                 onClick={() => setZoomedImage(null)}
-                className="absolute top-4 left-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-colors"
+                className="absolute top-safe-top right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-colors"
               >
                   <Icons.X />
               </button>
