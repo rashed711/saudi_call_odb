@@ -228,8 +228,9 @@ const ODBTable: React.FC = () => {
       </div>
 
       {/* Bulk Action Bar - Floats at bottom on mobile, top on desktop */}
+      {/* Raised to bottom-28 to clearly clear the nav bar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-20 left-4 right-4 md:absolute md:top-20 md:left-auto md:right-auto md:bottom-auto z-30 bg-slate-900 text-white p-3 rounded-xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 md:slide-in-from-top-2">
+        <div className="fixed bottom-28 left-4 right-4 md:absolute md:top-20 md:left-auto md:right-auto md:bottom-auto z-30 bg-slate-900 text-white p-3 rounded-xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 md:slide-in-from-top-2">
             <div className="flex items-center gap-3 px-2">
                 <button onClick={() => setSelectedIds([])} className="bg-white/20 p-1 rounded-full">
                     <Icons.X />
@@ -290,7 +291,8 @@ const ODBTable: React.FC = () => {
       </div>
 
       {/* Mobile App Card View */}
-      <div className="md:hidden space-y-3 pb-20">
+      {/* Increased bottom padding to pb-44 to ensure last item scrolls well above the bulk action bar */}
+      <div className="md:hidden space-y-3 pb-44">
         {filteredLocations.map((loc) => (
             <div 
                 key={loc.id} 
@@ -346,7 +348,7 @@ const ODBTable: React.FC = () => {
 
       {/* Full Screen Modal (App Style) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-gray-100 md:bg-black/50 md:backdrop-blur-sm flex items-end md:items-center justify-center">
+        <div className="fixed inset-0 z-[70] bg-gray-100 md:bg-black/50 md:backdrop-blur-sm flex items-end md:items-center justify-center">
           <div className="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl md:max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-10 duration-300">
             
             {/* Modal Header */}
@@ -446,7 +448,7 @@ const ODBTable: React.FC = () => {
       )}
 
       {zoomedImage && (
-          <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center p-2 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[80] bg-black flex items-center justify-center p-2 animate-in fade-in duration-200">
               <button onClick={() => setZoomedImage(null)} className="absolute top-safe right-4 p-4 text-white opacity-80 hover:opacity-100">
                   <Icons.X />
               </button>

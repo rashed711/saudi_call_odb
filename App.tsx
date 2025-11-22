@@ -206,7 +206,8 @@ const App: React.FC = () => {
         </header>
 
         {/* Content Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-8 w-full scroll-smooth pb-24 md:pb-8">
+        {/* Increased padding-bottom (pb-32) to ensure content clears the bottom nav bar completely */}
+        <div className="flex-1 overflow-y-auto p-3 md:p-8 w-full scroll-smooth pb-32 md:pb-8">
             <div className="max-w-7xl mx-auto">
                 {renderContent()}
             </div>

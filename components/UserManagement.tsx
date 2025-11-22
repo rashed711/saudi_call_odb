@@ -152,7 +152,7 @@ const UserManagement: React.FC = () => {
 
        {/* User Modal */}
        {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold mb-6 text-gray-800">
                 {formData.id ? 'تعديل مستخدم' : 'إضافة مستخدم جديد'}

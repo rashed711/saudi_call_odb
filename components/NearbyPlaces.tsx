@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ODBLocation, NearbyLocation, User } from '../types';
 import { getODBLocations, calculateDistance, saveODBLocation, getSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
@@ -19,6 +19,9 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false); // Toggle between View and Edit mode
   const [zoomedImage, setZoomedImage] = useState<string | null>(null); // For full screen image
   
+  // Ref for file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState<Partial<ODBLocation>>({
     id: 0,
     ODB_ID: '',
@@ -80,10 +83,19 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
     setNearbyPlaces(placesWithDistance.slice(0, settings.maxResults));
   };
 
-  // Handle Item Click
+  // Handle Item Click (View Mode)
   const handleItemClick = (place: NearbyLocation) => {
-      setFormData({...place});
+      setFormData({ ...place, notes: place.notes || '' });
       setIsEditing(false); // Start in view mode
+      setIsModalOpen(true);
+  };
+
+  // Handle Edit Click (Directly to Edit Mode)
+  const handleEditClick = (e: React.MouseEvent, place: NearbyLocation) => {
+      e.stopPropagation(); // Stop row click
+      e.preventDefault(); // Prevent any default button behavior
+      setFormData({ ...place, notes: place.notes || '' });
+      setIsEditing(true); // Start directly in edit mode
       setIsModalOpen(true);
   };
 
@@ -93,10 +105,14 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
     if (file) {
         const reader = new FileReader();
         reader.onloadend = () => {
-            setFormData({ ...formData, image: reader.result as string });
+            setFormData(prev => ({ ...prev, image: reader.result as string }));
         };
         reader.readAsDataURL(file);
     }
+  };
+
+  const triggerCamera = () => {
+      fileInputRef.current?.click();
   };
 
   // Handle Directions
@@ -115,9 +131,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
   };
 
   // Save Logic (Updates the original DB entry)
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSave = () => {
     // Validation
     if (!formData.CITYNAME || !formData.ODB_ID || !formData.id) {
         alert('حدث خطأ: بيانات الموقع غير مكتملة (ID أو الاسم مفقود).');
@@ -244,6 +258,15 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                      {place.notes && <span className="text-xs text-yellow-600 bg-yellow-100 px-1.5 rounded">ملاحظات</span>}
                   </div>
                 </div>
+                
+                {/* Direct Edit Button on Card - Explicit type="button" */}
+                <button
+                    type="button"
+                    onClick={(e) => handleEditClick(e, place)}
+                    className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-primary hover:text-white transition-colors active:scale-90 shadow-sm ml-1"
+                >
+                    <div className="scale-75"><Icons.Edit /></div>
+                </button>
               </div>
             ))}
           </div>
@@ -264,7 +287,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
       {/* Redesigned Details Modal - Compact & Fixed Actions */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4">
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
           
@@ -274,10 +297,13 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
             {/* Header - Compact */}
             <div className="bg-white border-b border-gray-100 px-4 py-3 flex justify-between items-center sticky top-0 z-10 shrink-0">
                 <div className="flex flex-col">
-                    <h3 className="font-bold text-gray-800 text-base leading-tight truncate max-w-[200px]">{formData.CITYNAME}</h3>
+                    <h3 className="font-bold text-gray-800 text-base leading-tight truncate max-w-[200px]">
+                        {isEditing ? 'تعديل البيانات' : formData.CITYNAME}
+                    </h3>
                     <span className="text-[10px] text-gray-400 font-mono">{formData.ODB_ID}</span>
                 </div>
                 <button 
+                    type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                 >
@@ -285,7 +311,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                 </button>
             </div>
 
-            {/* Content Body - Scrollable but minimal */}
+            {/* Content Body - Scrollable */}
             <div className="p-4 overflow-y-auto flex-1 overscroll-contain">
                 {!isEditing ? (
                     // ================= VIEW MODE (Compact) =================
@@ -337,7 +363,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                             </div>
                         </div>
 
-                        {/* Middle Section: Notes (Flexible Height) */}
+                        {/* Middle Section: Notes */}
                         <div className="flex-1 min-h-0">
                             <label className="block text-xs font-bold text-gray-500 mb-1">الملاحظات</label>
                             <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed border border-gray-100 h-full max-h-[150px] md:max-h-[200px] overflow-y-auto">
@@ -347,10 +373,11 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
                     </div>
                 ) : (
-                    // ================= EDIT MODE (Compact) =================
-                    <form id="editForm" onSubmit={handleSave} className="flex flex-col gap-3 h-full">
+                    // ================= EDIT MODE (No Form Tag) =================
+                    // Replaced <form> with <div> to prevent accidental submissions
+                    <div className="space-y-4">
                          
-                         {/* Compact Edit Grid */}
+                         {/* Coords Inputs */}
                          <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-500 mb-1">خط العرض (Lat)</label>
@@ -358,7 +385,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                                     type="number" step="any" required
                                     value={formData.LATITUDE}
                                     onChange={(e) => setFormData({ ...formData, LATITUDE: parseFloat(e.target.value) })}
-                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-center focus:bg-white focus:ring-1 focus:ring-primary outline-none"
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono text-center focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
                                 />
                             </div>
                             <div>
@@ -367,31 +394,52 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                                     type="number" step="any" required
                                     value={formData.LONGITUDE}
                                     onChange={(e) => setFormData({ ...formData, LONGITUDE: parseFloat(e.target.value) })}
-                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-center focus:bg-white focus:ring-1 focus:ring-primary outline-none"
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono text-center focus:bg-white focus:ring-2 focus:ring-primary outline-none transition-all"
                                 />
                             </div>
                          </div>
 
-                         <div className="flex gap-3">
-                            {/* Small Image Upload */}
-                            <label className="w-20 h-20 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 cursor-pointer active:bg-blue-50 hover:bg-gray-100 relative overflow-hidden shrink-0">
-                                {formData.image ? <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <Icons.Camera />}
-                                <span className="text-[8px] font-bold mt-1 relative z-10">{formData.image ? 'تغيير' : 'صورة'}</span>
-                                <input type="file" accept="image/*" className="hidden" onChange={handleImageCapture} />
-                            </label>
-                            
-                            {/* Notes Input */}
-                            <div className="flex-1">
-                                <label className="block text-[10px] font-bold text-gray-500 mb-1">تعديل الملاحظات</label>
-                                <textarea
-                                    value={formData.notes || ''}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs h-20 focus:bg-white focus:ring-1 focus:ring-primary outline-none resize-none"
-                                    placeholder="اكتب ملاحظاتك هنا..."
-                                ></textarea>
-                            </div>
-                         </div>
-                    </form>
+                        {/* Notes Input */}
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">تعديل الملاحظات</label>
+                            <textarea
+                                value={formData.notes || ''}
+                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm h-32 focus:bg-white focus:ring-2 focus:ring-primary outline-none resize-none transition-all"
+                                placeholder="اكتب الملاحظات هنا..."
+                            ></textarea>
+                        </div>
+
+                        {/* Image Input - Div-based trigger */}
+                        <div 
+                            onClick={triggerCamera}
+                            className="w-full h-24 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl flex flex-row items-center justify-center gap-3 text-blue-500 cursor-pointer active:bg-blue-100 hover:bg-blue-50/80 relative overflow-hidden transition-colors select-none"
+                        >
+                            {formData.image ? (
+                                <>
+                                    <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-40" />
+                                    <div className="relative z-10 flex items-center gap-2 bg-white/80 px-3 py-1 rounded-full shadow-sm">
+                                        <Icons.Camera />
+                                        <span className="text-xs font-bold">تغيير الصورة</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <Icons.Camera />
+                                    <span className="text-xs font-bold">التقاط صورة بالكاميرا</span>
+                                </>
+                            )}
+                            <input 
+                                ref={fileInputRef}
+                                type="file" 
+                                accept="image/*" 
+                                capture="environment" 
+                                className="hidden" 
+                                onChange={handleImageCapture} 
+                            />
+                        </div>
+
+                    </div>
                 )}
             </div>
 
@@ -400,6 +448,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                 {!isEditing ? (
                     <div className="flex gap-2">
                         <button 
+                            type="button"
                             onClick={handleGetDirections}
                             className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
                         >
@@ -407,8 +456,9 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                             <span>توجيه (Google Maps)</span>
                         </button>
                         <button 
+                            type="button"
                             onClick={() => setIsEditing(true)}
-                            className="w-12 bg-white border border-gray-200 text-gray-700 rounded-xl flex items-center justify-center shadow-sm active:scale-95 transition-all"
+                            className="w-14 bg-white border border-gray-200 text-gray-700 rounded-xl flex items-center justify-center shadow-sm active:scale-95 transition-all"
                         >
                             <Icons.Edit />
                         </button>
@@ -418,14 +468,14 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                          <button
                             type="button"
                             onClick={() => setIsEditing(false)}
-                            className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm"
+                            className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors"
                         >
                             إلغاء
                         </button>
                         <button
-                            type="submit"
-                            form="editForm"
-                            className="flex-[2] bg-gray-900 text-white py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2"
+                            type="button" 
+                            onClick={handleSave}
+                            className="flex-[2] bg-gray-900 text-white py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
                         >
                             <span>حفظ التعديلات</span>
                             <Icons.Check />
@@ -440,8 +490,9 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
       {/* Full Screen Image Zoom Modal */}
       {zoomedImage && (
-          <div className="fixed inset-0 z-50 bg-black bg-opacity-95 flex flex-col items-center justify-center p-2 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[80] bg-black bg-opacity-95 flex flex-col items-center justify-center p-2 animate-in fade-in duration-200">
               <button 
+                type="button"
                 onClick={() => setZoomedImage(null)}
                 className="absolute top-safe-top right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-colors"
               >
