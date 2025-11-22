@@ -1,11 +1,29 @@
 
-import { ODBLocation, User } from '../types';
+import { ODBLocation, User, SiteSettings } from '../types';
 
 // This service mocks what your PHP/SQL backend would do.
 // In a real implementation, these functions would use fetch() to call your PHP endpoints.
 
-const STORAGE_KEY_ODB = 'odb_data_v3'; // Changed key to reset data structure for string IDs
-const STORAGE_KEY_USER = 'odb_user_session';
+const STORAGE_KEY_ODB = 'odb_data_v3';
+const STORAGE_KEY_USER_SESSION = 'odb_user_session';
+// Updated key to v2 to force refresh of user data with correct passwords
+const STORAGE_KEY_USERS_DB = 'odb_users_db_v2';
+const STORAGE_KEY_SETTINGS = 'odb_settings_v2'; // Updated key for new settings structure
+
+const DEFAULT_SETTINGS: SiteSettings = {
+    siteName: 'ODB Manager Pro',
+    primaryColor: '#1e40af', // blue-800
+    secondaryColor: '#1e293b', // slate-800
+    accentColor: '#3b82f6', // blue-500
+    searchRadius: 50, // 50 km default
+    maxResults: 20    // 20 items default
+};
+
+const INITIAL_MOCK_USERS: User[] = [
+    { id: 1, username: 'admin', name: 'المدير العام', email: 'admin@example.com', role: 'admin', password: '123456', isActive: true },
+    { id: 2, username: 'user1', name: 'محمد أحمد', email: 'mohamed@example.com', role: 'user', password: '123456', isActive: true },
+    { id: 3, username: 'guest', name: 'زائر مؤقت', email: 'guest@example.com', role: 'user', password: '123456', isActive: false },
+];
 
 const INITIAL_MOCK_DATA: ODBLocation[] = [
   { id: 1, ODB_ID: "101", CITYNAME: 'Cairo (Downtown)', LATITUDE: 30.0444, LONGITUDE: 31.2357 },
@@ -22,33 +40,92 @@ const INITIAL_MOCK_DATA: ODBLocation[] = [
   { id: 12, ODB_ID: "SUEZ-01", CITYNAME: 'Suez', LATITUDE: 29.9668, LONGITUDE: 32.5498 },
 ];
 
-export const mockLogin = async (username: string, password: string): Promise<User> => {
-  // Simulate API delay
+// --- USERS DB HELPER ---
+const getUsersDB = (): User[] => {
+    const data = localStorage.getItem(STORAGE_KEY_USERS_DB);
+    if (!data) {
+        localStorage.setItem(STORAGE_KEY_USERS_DB, JSON.stringify(INITIAL_MOCK_USERS));
+        return INITIAL_MOCK_USERS;
+    }
+    return JSON.parse(data);
+};
+
+const saveUsersDB = (users: User[]) => {
+    localStorage.setItem(STORAGE_KEY_USERS_DB, JSON.stringify(users));
+};
+
+// --- AUTH ---
+export const mockLogin = async (username: string, pass: string): Promise<User> => {
   await new Promise((resolve) => setTimeout(resolve, 800));
 
-  if (username === 'admin' && password === '123456') {
-    const user: User = {
-      id: 1,
-      username: 'admin',
-      name: 'المدير العام',
-      email: 'admin@example.com',
-      role: 'admin',
-    };
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    return user;
+  const users = getUsersDB();
+  const foundUser = users.find(u => u.username === username && u.password === pass);
+
+  if (foundUser) {
+      if (!foundUser.isActive) {
+          throw new Error('تم إيقاف حسابك. يرجى مراجعة المسؤول.');
+      }
+      const { password, ...safeUser } = foundUser;
+      localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(safeUser));
+      return safeUser as User;
   }
+  
   throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
 };
 
 export const mockLogout = () => {
-  localStorage.removeItem(STORAGE_KEY_USER);
+  localStorage.removeItem(STORAGE_KEY_USER_SESSION);
 };
 
 export const getSession = (): User | null => {
-  const data = localStorage.getItem(STORAGE_KEY_USER);
+  const data = localStorage.getItem(STORAGE_KEY_USER_SESSION);
   return data ? JSON.parse(data) : null;
 };
 
+// --- USER MANAGEMENT ---
+export const getUsers = (): User[] => {
+    const users = getUsersDB();
+    // remove passwords from list view
+    return users.map(({ password, ...u }) => ({...u, password: ''} as User));
+};
+
+export const saveUser = (user: User) => {
+    let users = getUsersDB();
+    if (user.id) {
+        // Update
+        users = users.map(u => {
+            if (u.id === user.id) {
+                // Only update password if provided, else keep old
+                const newPass = user.password ? user.password : u.password;
+                return { ...u, ...user, password: newPass };
+            }
+            return u;
+        });
+    } else {
+        // Create
+        const maxId = users.reduce((max, u) => (u.id > max ? u.id : max), 0);
+        users.push({ ...user, id: maxId + 1 });
+    }
+    saveUsersDB(users);
+    return users;
+};
+
+export const deleteUser = (id: number) => {
+    let users = getUsersDB();
+    users = users.filter(u => u.id !== id);
+    saveUsersDB(users);
+    return users;
+};
+
+export const toggleUserStatus = (id: number) => {
+    let users = getUsersDB();
+    users = users.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u);
+    saveUsersDB(users);
+    return users;
+};
+
+
+// --- ODB LOCATIONS ---
 export const getODBLocations = (): ODBLocation[] => {
   const data = localStorage.getItem(STORAGE_KEY_ODB);
   if (!data) {
@@ -60,17 +137,13 @@ export const getODBLocations = (): ODBLocation[] => {
 
 export const saveODBLocation = (location: ODBLocation) => {
   const current = getODBLocations();
-  // Check if updating existing record based on internal ID
   const existingIndex = current.findIndex(l => l.id === location.id);
   
   if (existingIndex >= 0) {
     current[existingIndex] = location;
   } else {
-    // New Record
-    // Generate Internal ID (Automatic & Unique)
     const maxId = current.reduce((max, item) => (item.id > max ? item.id : max), 0);
     location.id = maxId + 1;
-    // NOTE: location.ODB_ID comes from the form input
     current.push(location);
   }
   
@@ -78,17 +151,13 @@ export const saveODBLocation = (location: ODBLocation) => {
   return current;
 };
 
-// Bulk save for importing large files
 export const saveBulkODBLocations = (locations: Omit<ODBLocation, 'id'>[]) => {
   const current = getODBLocations();
   let maxId = current.reduce((max, item) => (item.id > max ? item.id : max), 0);
   
   const newEntries = locations.map((loc) => {
     maxId++;
-    return {
-      ...loc,
-      id: maxId
-    } as ODBLocation;
+    return { ...loc, id: maxId } as ODBLocation;
   });
 
   const updatedList = [...current, ...newEntries];
@@ -98,15 +167,13 @@ export const saveBulkODBLocations = (locations: Omit<ODBLocation, 'id'>[]) => {
 
 export const deleteODBLocation = (id: number) => {
   let current = getODBLocations();
-  // Delete by internal ID
   current = current.filter(l => l.id !== id);
   localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(current));
   return current;
 };
 
-// Haversine formula to calculate distance in KM
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371; 
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a =
@@ -114,10 +181,38 @@ export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
+  const d = R * c; 
   return d;
 };
 
 function deg2rad(deg: number) {
   return deg * (Math.PI / 180);
 }
+
+// --- SITE SETTINGS ---
+export const getSiteSettings = (): SiteSettings => {
+    const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
+    if (data) {
+        const parsed = JSON.parse(data);
+        // Ensure new fields exist if loading old data
+        return { ...DEFAULT_SETTINGS, ...parsed };
+    }
+    return DEFAULT_SETTINGS;
+};
+
+export const saveSiteSettings = (settings: SiteSettings) => {
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+    applySiteSettings(settings);
+    return settings;
+};
+
+export const applySiteSettings = (settings: SiteSettings) => {
+    // Update Document Title
+    document.title = settings.siteName;
+
+    // Update CSS Variables for Tailwind colors
+    const root = document.documentElement;
+    root.style.setProperty('--color-primary', settings.primaryColor);
+    root.style.setProperty('--color-secondary', settings.secondaryColor);
+    root.style.setProperty('--color-accent', settings.accentColor);
+};
