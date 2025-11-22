@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
 };
 
 // --- HELPER ---
-async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null, signal?: AbortSignal) {
+async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null, signal?: AbortSignal, silent: boolean = false) {
     const url = `${API_BASE_URL}?action=${action}`;
     const options: RequestInit = {
         method,
@@ -53,11 +53,14 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
         const response = await fetch(url, options);
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") === -1) {
-             throw new Error(`Server Error (HTML response)`);
+             // Try to get text to debug
+             const text = await response.text();
+             // If response is empty or HTML 404, throw helpful error
+             throw new Error(`Server Error: ${response.status} ${response.statusText}`);
         }
         const text = await response.text();
         let data;
-        try { data = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON'); }
+        try { data = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON Response'); }
 
         if (response.ok) {
             if (data.error) throw new Error(data.error);
@@ -67,7 +70,8 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
         }
     } catch (error: any) {
         if (error.name === 'AbortError') throw error;
-        console.error(`API Request Failed [${action}]:`, error);
+        // Suppress log if silent is requested (useful for optional endpoints like settings)
+        if (!silent) console.error(`API Request Failed [${action}]:`, error);
         throw error;
     }
 }
@@ -167,8 +171,11 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
     const mappedData = result.data.map((loc: any) => ({
         ...loc,
         id: Number(loc.id),
-        LATITUDE: Number(loc.LATITUDE),
-        LONGITUDE: Number(loc.LONGITUDE),
+        // Map various casing possibilities to ensure Frontend gets data
+        ODB_ID: loc.ODB_ID || loc.odb_id,
+        CITYNAME: loc.CITYNAME || loc.city_name,
+        LATITUDE: Number(loc.LATITUDE || loc.latitude),
+        LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         // Map snake_case from DB to camelCase for Frontend
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
         lastEditedAt: loc.last_edited_at || loc.lastEditedAt
@@ -186,8 +193,10 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
     const mappedData = result.data.map((loc: any) => ({
         ...loc,
         id: Number(loc.id),
-        LATITUDE: Number(loc.LATITUDE),
-        LONGITUDE: Number(loc.LONGITUDE),
+        ODB_ID: loc.ODB_ID || loc.odb_id,
+        CITYNAME: loc.CITYNAME || loc.city_name,
+        LATITUDE: Number(loc.LATITUDE || loc.latitude),
+        LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         // Map snake_case from DB to camelCase for Frontend
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
         lastEditedAt: loc.last_edited_at || loc.lastEditedAt
@@ -202,8 +211,10 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
     return data.map((loc: any) => ({
         ...loc,
         id: Number(loc.id),
-        LATITUDE: Number(loc.LATITUDE),
-        LONGITUDE: Number(loc.LONGITUDE),
+        ODB_ID: loc.ODB_ID || loc.odb_id,
+        CITYNAME: loc.CITYNAME || loc.city_name,
+        LATITUDE: Number(loc.LATITUDE || loc.latitude),
+        LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         distance: Number(loc.distance),
         // Map snake_case from DB to camelCase for Frontend
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
@@ -215,6 +226,7 @@ export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
     // Ensure we send snake_case keys for the backend to understand
     const payload = {
         ...location,
+        // Send fields that match backend expectations if necessary (PHP normally reads ODB_ID/CITYNAME from input array)
         last_edited_by: location.lastEditedBy,
         last_edited_at: location.lastEditedAt
     };
@@ -233,9 +245,11 @@ export const deleteODBLocation = async (id: number): Promise<void> => {
 // --- SITE SETTINGS ---
 export const getSiteSettings = async (): Promise<SiteSettings> => {
     try {
-        const settings = await apiRequest('get_settings');
+        // Pass silent=true to suppress console errors if endpoint is missing or failing
+        const settings = await apiRequest('get_settings', 'GET', null, undefined, true);
         return { ...DEFAULT_SETTINGS, ...settings, searchRadius: Number(settings.searchRadius), maxResults: Number(settings.maxResults) };
     } catch (e) {
+        // Just fallback to defaults without noise
         return DEFAULT_SETTINGS;
     }
 };
