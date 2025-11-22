@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, ODBLocation } from '../types';
 import { getMyActivity, saveODBLocation } from '../services/mockBackend';
 import { Icons } from './Icons';
+import { PermissionGuard } from './PermissionGuard';
 
 interface Props {
     user: User;
@@ -99,9 +100,16 @@ const MyActivity: React.FC<Props> = ({ user }) => {
                                     </td>
                                     <td className="px-4 py-3 md:px-6 font-mono text-blue-600 hidden md:table-cell">{loc.ODB_ID}</td>
                                     <td className="px-4 py-3 md:px-6 text-center">
-                                        <button onClick={() => handleEdit(loc)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors">
-                                            <Icons.Edit />
-                                        </button>
+                                        <PermissionGuard 
+                                            user={user} 
+                                            resource="my_activity" 
+                                            action="edit"
+                                            fallback={<span className="text-gray-300 text-[10px]">للعرض</span>}
+                                        >
+                                            <button onClick={() => handleEdit(loc)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors">
+                                                <Icons.Edit />
+                                            </button>
+                                        </PermissionGuard>
                                     </td>
                                 </tr>
                             ))}
