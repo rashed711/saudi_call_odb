@@ -317,10 +317,22 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                 {!isEditing ? (
                     <>
                         {formData.image && <img src={formData.image} className="w-full h-40 object-cover rounded-lg" />}
-                        <div className="grid grid-cols-2 gap-2 text-center text-xs bg-gray-50 p-2 rounded-lg">
-                            <div><span className="block text-gray-400">Lat</span>{formData.LATITUDE?.toFixed(5)}</div>
-                            <div><span className="block text-gray-400">Lng</span>{formData.LONGITUDE?.toFixed(5)}</div>
+                        
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs bg-gray-50 p-2 rounded-lg">
+                            <div className="bg-white p-1.5 rounded border border-gray-100 shadow-sm">
+                                <span className="block text-[10px] text-gray-400 uppercase mb-0.5">ODB_ID</span>
+                                <span className="font-mono font-bold text-blue-600 text-sm break-all">{formData.ODB_ID}</span>
+                            </div>
+                            <div className="bg-white p-1.5 rounded border border-gray-100 shadow-sm flex flex-col justify-center">
+                                <span className="block text-[10px] text-gray-400 uppercase mb-0.5">Lat</span>
+                                <span className="font-bold text-gray-800">{formData.LATITUDE?.toFixed(5)}</span>
+                            </div>
+                            <div className="bg-white p-1.5 rounded border border-gray-100 shadow-sm flex flex-col justify-center">
+                                <span className="block text-[10px] text-gray-400 uppercase mb-0.5">Lng</span>
+                                <span className="font-bold text-gray-800">{formData.LONGITUDE?.toFixed(5)}</span>
+                            </div>
                         </div>
+
                         <div className="bg-yellow-50 p-3 rounded-lg text-sm text-gray-700 min-h-[60px]">{formData.notes || 'لا توجد ملاحظات'}</div>
                         <button onClick={(e) => handleGetDirections(e)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Icons.Navigation /> اذهب للموقع</button>
                         <button onClick={() => setIsEditing(true)} className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">تعديل البيانات</button>
