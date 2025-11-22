@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
 };
 
 // --- HELPER: GENERIC FETCH WRAPPER ---
-async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null) {
+async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null, signal?: AbortSignal) {
     // Append action to URL
     const url = `${API_BASE_URL}?action=${action}`;
     
@@ -28,7 +28,8 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
             'Content-Type': 'application/json',
         },
         // Standard CORS mode
-        mode: 'cors'
+        mode: 'cors',
+        signal // Pass the abort signal
     };
 
     if (body) {
@@ -68,6 +69,9 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
             throw new Error(data.error || `HTTP Error: ${response.status}`);
         }
     } catch (error: any) {
+        if (error.name === 'AbortError') {
+            throw error; // Let the caller handle aborts (usually ignore)
+        }
         console.error(`API Request Failed [${action}]:`, error);
         
         if (error.message === 'Failed to fetch') {
@@ -134,8 +138,9 @@ export const getODBLocations = async (): Promise<ODBLocation[]> => {
 };
 
 // New method (Server-side Pagination) - Used for ODBTable
-export const getODBLocationsPaginated = async (page: number, limit: number, search: string = ''): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
-    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET');
+// Added signal support
+export const getODBLocationsPaginated = async (page: number, limit: number, search: string = '', signal?: AbortSignal): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
+    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
     
     const mappedData = result.data.map((loc: any) => ({
         ...loc,

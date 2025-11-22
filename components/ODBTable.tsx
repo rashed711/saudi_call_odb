@@ -46,22 +46,39 @@ const ODBTable: React.FC = () => {
       return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const fetchLocations = async () => {
+  const fetchLocations = async (signal?: AbortSignal) => {
       setLoading(true);
       try {
-          const result = await getODBLocationsPaginated(page, limit, debouncedSearch);
-          setLocations(result.data);
+          const result = await getODBLocationsPaginated(page, limit, debouncedSearch, signal);
+          
+          // Client-side deduplication: ensure we don't show the same ODB_ID twice even if DB has dupes
+          const uniqueLocations = result.data.filter((loc, index, self) => 
+             index === self.findIndex((t) => (
+                t.ODB_ID === loc.ODB_ID
+             ))
+          );
+
+          setLocations(uniqueLocations);
           setTotalItems(result.total);
           setTotalPages(result.totalPages);
-      } catch (error) {
+      } catch (error: any) {
+          if (error.name === 'AbortError') {
+              // Request was cancelled, do nothing
+              return;
+          }
           console.error("Error fetching locations:", error);
       } finally {
-          setLoading(false);
+           // Only turn off loading if not aborted (to prevent flashing)
+           if (!signal?.aborted) {
+             setLoading(false);
+           }
       }
   };
 
   useEffect(() => {
-    fetchLocations();
+    const controller = new AbortController();
+    fetchLocations(controller.signal);
+    return () => controller.abort();
   }, [page, limit, debouncedSearch]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
