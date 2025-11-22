@@ -1,9 +1,7 @@
-
 import { ODBLocation, User, SiteSettings } from '../types';
 
 // ---------------------------------------------------------------------------
-// تم تحديث الرابط ليعمل على الاستضافة الحية (Production)
-// المسار: public_html/api/api.php -> https://start.enjaz.cloud/api/api.php
+// تم تحديث الرابط ليعمل على الاستضافة الجديدة (Cloud)
 // ---------------------------------------------------------------------------
 const API_BASE_URL = 'https://start.enjaz.cloud/api/api.php'; 
 
@@ -44,6 +42,12 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
         if (contentType && contentType.indexOf("application/json") === -1) {
              const text = await response.text();
              console.error(`Server returned HTML instead of JSON at ${url}. Preview:`, text.substring(0, 150));
+             
+             // تحسين رسالة الخطأ لتكون أوضح للمستخدم في حالة وجود خطأ برمجي في PHP
+             if (text.includes("Parse error") || text.includes("Fatal error") || text.includes("Syntax error")) {
+                 throw new Error(`خطأ برمجي في ملف PHP (Syntax Error). تأكد من أنك كتبت require_once بشكل صحيح (كلمة واحدة).`);
+             }
+             
              throw new Error(`خطأ في الرابط: السيرفر رد بصفحة HTML بدلاً من JSON. تأكد من مسار ملف api.php.`);
         }
 
@@ -73,7 +77,7 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
             try {
                 await fetch(url, { mode: 'no-cors', method: 'GET' });
                 // إذا وصلنا هنا، فهذا يعني أن السيرفر موجود واستقبل الطلب، لكن المتصفح حجبه بسبب CORS
-                throw new Error(`تم كشف السيرفر ولكن تم حظر الاتصال! \nالحل: يجب إضافة كود (header Access-Control-Allow-Origin) في ملف api.php.`);
+                throw new Error(`تم كشف السيرفر ولكن تم حظر الاتصال (CORS)! \nالحل: تأكد من وجود كود الـ Header في ملف api.php على السيرفر الجديد.`);
             } catch (innerError) {
                 // إذا فشل حتى no-cors، فهذا يعني أن الرابط خطأ أو السيرفر طافي
                 throw new Error(`تعذر الوصول للسيرفر نهائياً (${API_BASE_URL}). \nتأكد أن الرابط صحيح وأن الاستضافة تعمل.`);
@@ -168,8 +172,8 @@ export const getSiteSettings = async (): Promise<SiteSettings> => {
         const settings = await apiRequest('get_settings');
         return { ...DEFAULT_SETTINGS, ...settings, searchRadius: Number(settings.searchRadius), maxResults: Number(settings.maxResults) };
     } catch (e) {
-        // Silent fail for settings to allow app to load
-        console.warn("Failed to load settings from API, using defaults");
+        // Silent fail for settings to allow app to load, but log error
+        console.warn("Failed to load settings from API, using defaults. Check API connection.");
         return DEFAULT_SETTINGS;
     }
 };
