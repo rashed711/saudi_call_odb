@@ -1,5 +1,5 @@
 
-import { ODBLocation, User, SiteSettings } from '../types';
+import { ODBLocation, User, SiteSettings, NearbyLocation } from '../types';
 
 // ---------------------------------------------------------------------------
 // تم تحديث الرابط ليعمل على الاستضافة الجديدة (Cloud)
@@ -126,7 +126,7 @@ export const toggleUserStatus = async (id: number): Promise<void> => {
 
 // --- ODB LOCATIONS ---
 
-// Legacy method (fetches all) - Used for NearbyPlaces to calculate client-side logic
+// Legacy method (DEPRECATED for large datasets)
 export const getODBLocations = async (): Promise<ODBLocation[]> => {
     const data = await apiRequest('get_locations');
     return data.map((loc: any) => ({
@@ -137,8 +137,23 @@ export const getODBLocations = async (): Promise<ODBLocation[]> => {
     }));
 };
 
+// Server-Side Nearby Search (Highly Efficient)
+export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: number, limit: number): Promise<NearbyLocation[]> => {
+    // If radius is 0 (unlimited), we pass a very large number to SQL
+    const effectiveRadius = radius === 0 ? 20000 : radius;
+    
+    const data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
+    
+    return data.map((loc: any) => ({
+        ...loc,
+        id: Number(loc.id),
+        LATITUDE: Number(loc.LATITUDE),
+        LONGITUDE: Number(loc.LONGITUDE),
+        distance: Number(loc.distance) // SQL calculates this now
+    }));
+};
+
 // New method (Server-side Pagination) - Used for ODBTable
-// Added signal support
 export const getODBLocationsPaginated = async (page: number, limit: number, search: string = '', signal?: AbortSignal): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
     const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
     
@@ -169,7 +184,7 @@ export const deleteODBLocation = async (id: number): Promise<void> => {
     await apiRequest(`delete_location&id=${id}`, 'GET');
 };
 
-// Helper: Calculate Distance (Client Side logic)
+// Helper: Calculate Distance (Client Side logic - Keeping it for fallback if needed)
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371; 
   const dLat = deg2rad(lat2 - lat1);

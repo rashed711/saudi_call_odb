@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { ODBLocation, NearbyLocation, User } from '../types';
-import { getODBLocations, calculateDistance, saveODBLocation, getSiteSettings } from '../services/mockBackend';
+import { getNearbyLocationsAPI, saveODBLocation, getSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
 
 interface NearbyPlacesProps {
@@ -71,32 +71,25 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
   const processNearby = async (lat: number, lng: number) => {
     try {
-        // Fetch both locations and settings asynchronously
-        const [allLocations, settings] = await Promise.all([
-            getODBLocations(),
-            getSiteSettings()
-        ]);
+        // 1. Fetch settings first to know Radius and Limit
+        const settings = await getSiteSettings();
 
-        let placesWithDistance = allLocations.map((loc) => {
-          const dist = calculateDistance(lat, lng, loc.LATITUDE, loc.LONGITUDE);
-          return { ...loc, distance: dist };
-        });
+        // 2. Call the optimized Server-Side API
+        // This sends coordinates to server, server returns ONLY nearby places
+        // This prevents "Invalid JSON" errors due to memory exhaustion
+        const places = await getNearbyLocationsAPI(
+            lat, 
+            lng, 
+            settings.searchRadius, 
+            settings.maxResults
+        );
 
-        // 1. Sort by distance
-        placesWithDistance.sort((a, b) => a.distance - b.distance);
-
-        // 2. Filter by Radius (if radius > 0)
-        if (settings.searchRadius > 0) {
-            placesWithDistance = placesWithDistance.filter(p => p.distance <= settings.searchRadius);
-        }
-
-        // 3. Slice by maxResults
-        setNearbyPlaces(placesWithDistance.slice(0, settings.maxResults));
+        setNearbyPlaces(places);
         setStatus('success');
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
         setStatus('error');
-        setErrorMsg('فشل الاتصال بقاعدة البيانات');
+        setErrorMsg(e.message || 'فشل الاتصال بقاعدة البيانات');
     }
   };
 
