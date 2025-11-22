@@ -34,7 +34,12 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (u: User) => {
     setUser(u);
-    setCurrentView(View.DASHBOARD);
+    // Check if user is a delegate and has permission for nearby, if so, redirect there
+    if (u.role === 'delegate' && hasPermission(u, 'nearby', 'view')) {
+      setCurrentView(View.NEARBY);
+    } else {
+      setCurrentView(View.DASHBOARD);
+    }
   };
 
   const handleLogout = () => {
@@ -69,7 +74,7 @@ const App: React.FC = () => {
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-4">
             {can('odb', 'view') && (
-                <DashboardCard onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Settings />} color="blue" title="إدارة المواقع" desc="السجل العام" />
+                <DashboardCard onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} color="blue" title="إدارة المواقع" desc="السجل العام" />
             )}
             {can('nearby', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} color="purple" title="الأماكن القريبة" desc="الخريطة" />
@@ -81,7 +86,7 @@ const App: React.FC = () => {
                 <DashboardCard onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} color="green" title="فريق العمل" desc="إدارة الصلاحيات والهيكل" />
             )}
             {can('settings', 'view') && (
-                <DashboardCard onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Palette />} color="gray" title="النظام" desc="إعدادات التطبيق" />
+                <DashboardCard onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Settings />} color="gray" title="النظام" desc="إعدادات التطبيق" />
             )}
           </div>
         );
@@ -100,13 +105,13 @@ const App: React.FC = () => {
           <SidebarItem active={currentView === View.DASHBOARD} onClick={() => setCurrentView(View.DASHBOARD)} icon={<Icons.Dashboard />} text="الرئيسية" />
           
           <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">العمليات</div>
-          {can('odb', 'view') && <SidebarItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Settings />} text="كل المواقع" />}
+          {can('odb', 'view') && <SidebarItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} text="كل المواقع" />}
           {can('my_activity', 'view') && <SidebarItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} text="نشاطي" />}
           {can('nearby', 'view') && <SidebarItem active={currentView === View.NEARBY} onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} text="الأماكن القريبة" />}
           
           {(can('users', 'view') || can('settings', 'view')) && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">الإدارة</div>}
           {can('users', 'view') && <SidebarItem active={currentView === View.USERS} onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} text="المستخدمين" />}
-          {can('settings', 'view') && <SidebarItem active={currentView === View.SETTINGS_SITE} onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Palette />} text="المظهر" />}
+          {can('settings', 'view') && <SidebarItem active={currentView === View.SETTINGS_SITE} onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Settings />} text="إعدادات الموقع" />}
           
           <SidebarItem active={currentView === View.PROFILE} onClick={() => setCurrentView(View.PROFILE)} icon={<Icons.User />} text="حسابي" />
         </nav>
@@ -129,6 +134,9 @@ const App: React.FC = () => {
                 {currentView === View.SETTINGS_ODB && 'سجل المواقع المركزي'}
                 {currentView === View.MY_ACTIVITY && 'سجل نشاطي'}
                 {currentView === View.USERS && 'إدارة الصلاحيات'}
+                {currentView === View.SETTINGS_SITE && 'إعدادات الموقع'}
+                {currentView === View.NEARBY && 'الأماكن القريبة'}
+                {currentView === View.PROFILE && 'الملف الشخصي'}
             </div>
             <div className="flex items-center gap-3">
                  <div className="hidden md:block text-sm text-gray-600"><span className="font-bold text-gray-900">{user.name}</span> <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full border">{user.role === 'admin' ? 'مدير' : user.role === 'supervisor' ? 'مشرف' : 'مندوب'}</span></div>
@@ -143,7 +151,7 @@ const App: React.FC = () => {
         {/* Mobile Bottom Nav */}
         <nav className="md:hidden shrink-0 h-[calc(4rem+env(safe-area-inset-bottom))] bg-white border-t border-gray-200 flex justify-around items-start pt-1 px-2 z-30 shadow-up pb-[env(safe-area-inset-bottom)]">
             <MobileNavItem active={currentView === View.DASHBOARD} onClick={() => setCurrentView(View.DASHBOARD)} icon={<Icons.Dashboard />} label="الرئيسية" />
-            {can('odb', 'view') && <MobileNavItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Settings />} label="القائمة" />}
+            {can('odb', 'view') && <MobileNavItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} label="القائمة" />}
             {can('nearby', 'view') && (
                 <div className="-mt-6">
                     <button onClick={() => setCurrentView(View.NEARBY)} className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${currentView === View.NEARBY ? 'bg-primary text-white' : 'bg-secondary text-white'}`}>
