@@ -6,6 +6,7 @@ import { Icons } from './Icons';
 
 const ODBTable: React.FC = () => {
   const [locations, setLocations] = useState<ODBLocation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -26,8 +27,20 @@ const ODBTable: React.FC = () => {
     lastEditedAt: '',
   });
 
+  const fetchLocations = async () => {
+      setLoading(true);
+      try {
+          const data = await getODBLocations();
+          setLocations(data);
+      } catch (error) {
+          console.error("Error fetching locations:", error);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   useEffect(() => {
-    setLocations(getODBLocations());
+    fetchLocations();
   }, []);
 
   const filteredLocations = locations.filter(loc => {
@@ -58,26 +71,23 @@ const ODBTable: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // --- DELETE LOGIC WITH CONFIRMATION ---
-  const handleDeleteRow = (e: React.MouseEvent, id: number, cityName: string) => {
+  const handleDeleteRow = async (e: React.MouseEvent, id: number, cityName: string) => {
       e.stopPropagation(); 
-      
-      // Confirmation Dialog
-      const isConfirmed = window.confirm(`تحذير هام!\n\nهل أنت متأكد من رغبتك في حذف الموقع: "${cityName}"؟\n\nهذا الإجراء لا يمكن التراجع عنه وسيؤدي لفقدان البيانات.`);
+      const isConfirmed = window.confirm(`تحذير هام!\n\nهل أنت متأكد من رغبتك في حذف الموقع: "${cityName}"؟\n\nهذا الإجراء لا يمكن التراجع عنه.`);
       
       if (isConfirmed) {
-          deleteODBLocation(id);
-          setLocations(getODBLocations()); 
+          await deleteODBLocation(id);
+          fetchLocations();
           setSelectedIds(prev => prev.filter(pid => pid !== id));
       }
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (window.confirm(`تنبيه أمني!\n\nهل أنت متأكد من حذف ${selectedIds.length} موقع/مواقع؟\nلا يمكن استرجاع البيانات بعد الحذف.`)) {
-      selectedIds.forEach(id => {
-        deleteODBLocation(id); 
-      });
-      setLocations(getODBLocations()); 
+      for (const id of selectedIds) {
+          await deleteODBLocation(id);
+      }
+      fetchLocations();
       setSelectedIds([]);
     }
   };
@@ -107,7 +117,7 @@ const ODBTable: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.CITYNAME || !formData.ODB_ID) return;
 
@@ -123,8 +133,8 @@ const ODBTable: React.FC = () => {
       lastEditedAt: formData.lastEditedAt 
     };
 
-    const updatedList = saveODBLocation(newLoc);
-    setLocations(updatedList);
+    await saveODBLocation(newLoc);
+    fetchLocations();
     setIsModalOpen(false);
     setSelectedIds([]); 
   };
@@ -149,7 +159,7 @@ const ODBTable: React.FC = () => {
     if (!file) return;
     setIsImporting(true);
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
         const lines = text.split(/\r\n|\n/);
@@ -171,8 +181,8 @@ const ODBTable: React.FC = () => {
         }
         if (newLocations.length > 0) {
             if (window.confirm(`تم قراءة ${newLocations.length} موقع. هل تريد إضافتهم؟`)) {
-                const updated = saveBulkODBLocations(newLocations);
-                setLocations(updated);
+                await saveBulkODBLocations(newLocations);
+                fetchLocations();
             }
         }
       } catch (err) {
@@ -214,12 +224,11 @@ const ODBTable: React.FC = () => {
             </button>
         </div>
 
-        {/* Toolbar for Desktop / Extra actions */}
         <div className="flex justify-between items-center px-1">
-            <p className="text-xs text-gray-500 font-medium">{filteredLocations.length} موقع مسجل</p>
+            <p className="text-xs text-gray-500 font-medium">{loading ? 'جاري التحميل...' : `${filteredLocations.length} موقع مسجل`}</p>
             <button
                 onClick={handleImportClick}
-                disabled={isImporting}
+                disabled={isImporting || loading}
                 className="text-xs flex items-center gap-1 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors font-bold"
             >
                 {isImporting ? 'جاري التحميل...' : <><Icons.Upload /> <span>استيراد CSV</span></>}
@@ -227,8 +236,7 @@ const ODBTable: React.FC = () => {
         </div>
       </div>
 
-      {/* Bulk Action Bar - Floats at bottom on mobile, top on desktop */}
-      {/* Raised to bottom-28 to clearly clear the nav bar */}
+      {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
         <div className="fixed bottom-28 left-4 right-4 md:absolute md:top-20 md:left-auto md:right-auto md:bottom-auto z-30 bg-slate-900 text-white p-3 rounded-xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 md:slide-in-from-top-2">
             <div className="flex items-center gap-3 px-2">
@@ -266,7 +274,9 @@ const ODBTable: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredLocations.map((loc) => (
+            {loading ? (
+                <tr><td colSpan={5} className="text-center py-10 text-gray-500">جاري الاتصال بقاعدة البيانات...</td></tr>
+            ) : filteredLocations.map((loc) => (
                 <tr key={loc.id} onClick={() => handleRowClick(loc)} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${selectedIds.includes(loc.id) ? 'bg-blue-50' : ''}`}>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" checked={selectedIds.includes(loc.id)} onChange={(e) => { e.stopPropagation(); handleSelectRow(loc.id); }} onClick={(e) => e.stopPropagation()} />
@@ -291,9 +301,14 @@ const ODBTable: React.FC = () => {
       </div>
 
       {/* Mobile App Card View */}
-      {/* Increased bottom padding to pb-44 to ensure last item scrolls well above the bulk action bar */}
       <div className="md:hidden space-y-3 pb-44">
-        {filteredLocations.map((loc) => (
+        {loading && (
+            <div className="flex flex-col gap-3">
+                {[1,2,3].map(i => <div key={i} className="h-24 bg-gray-200 rounded-xl animate-pulse"></div>)}
+            </div>
+        )}
+        
+        {!loading && filteredLocations.map((loc) => (
             <div 
                 key={loc.id} 
                 className={`bg-white rounded-2xl p-4 shadow-sm border active:scale-[0.98] transition-transform ${selectedIds.includes(loc.id) ? 'border-primary bg-blue-50/30' : 'border-gray-100'}`}
@@ -323,7 +338,6 @@ const ODBTable: React.FC = () => {
                     )}
                 </div>
 
-                {/* Card Footer Actions */}
                 <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
                      <div className="flex gap-2">
                          {loc.notes && <span className="text-[10px] text-yellow-700 bg-yellow-50 px-2 py-1 rounded-full font-bold">ملاحظات</span>}
@@ -338,7 +352,7 @@ const ODBTable: React.FC = () => {
             </div>
         ))}
         
-        {filteredLocations.length === 0 && (
+        {!loading && filteredLocations.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                 <Icons.Search />
                 <p className="mt-2 text-sm">لا توجد نتائج</p>
@@ -346,21 +360,19 @@ const ODBTable: React.FC = () => {
         )}
       </div>
 
-      {/* Full Screen Modal (App Style) */}
+      {/* Full Screen Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[70] bg-gray-100 md:bg-black/50 md:backdrop-blur-sm flex items-end md:items-center justify-center">
           <div className="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl md:max-h-[90vh] overflow-hidden flex flex-col animate-in slide-in-from-bottom-full md:slide-in-from-bottom-10 duration-300">
             
-            {/* Modal Header */}
             <div className="bg-white px-4 py-3 border-b border-gray-100 flex items-center justify-between sticky top-0 z-10 shadow-sm shrink-0">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-500 p-2 -ml-2 hover:bg-gray-50 rounded-full">
                     <span className="text-sm font-bold">إلغاء</span>
                 </button>
                 <h3 className="font-bold text-lg text-gray-800">{formData.id ? 'تعديل الموقع' : 'إضافة جديد'}</h3>
-                <div className="w-8"></div> {/* Spacer */}
+                <div className="w-8"></div> 
             </div>
 
-            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
                 <form id="locationForm" onSubmit={handleSave} className="space-y-4">
                     
@@ -436,7 +448,6 @@ const ODBTable: React.FC = () => {
                 </form>
             </div>
             
-             {/* Footer Action Button */}
              <div className="p-4 bg-white border-t border-gray-100 shrink-0 pb-safe">
                 <button form="locationForm" type="submit" className="w-full bg-primary text-white font-bold text-lg py-3.5 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-transform">
                     حفظ البيانات

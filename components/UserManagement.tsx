@@ -6,6 +6,7 @@ import { Icons } from './Icons';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<User>>({
       id: 0,
@@ -21,13 +22,21 @@ const UserManagement: React.FC = () => {
     loadUsers();
   }, []);
 
-  const loadUsers = () => {
-      setUsers(getUsers());
+  const loadUsers = async () => {
+      setLoading(true);
+      try {
+        const data = await getUsers();
+        setUsers(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
   };
 
   const handleOpenModal = (user?: User) => {
       if (user) {
-          setFormData({ ...user, password: '' }); // Clear password field for edit
+          setFormData({ ...user, password: '' });
       } else {
           setFormData({
               id: 0,
@@ -42,30 +51,29 @@ const UserManagement: React.FC = () => {
       setIsModalOpen(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
       if (window.confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟')) {
-          deleteUser(id);
+          await deleteUser(id);
           loadUsers();
       }
   };
 
-  const handleToggleStatus = (id: number) => {
-      toggleUserStatus(id);
+  const handleToggleStatus = async (id: number) => {
+      await toggleUserStatus(id);
       loadUsers();
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
       
       if (!formData.username || !formData.name) return;
       
-      // Basic validation for new users
       if (!formData.id && !formData.password) {
           alert('يجب إدخال كلمة مرور للمستخدم الجديد');
           return;
       }
 
-      saveUser(formData as User);
+      await saveUser(formData as User);
       setIsModalOpen(false);
       loadUsers();
   };
@@ -103,7 +111,9 @@ const UserManagement: React.FC = () => {
                    </tr>
                </thead>
                <tbody className="divide-y divide-gray-100">
-                   {users.map(user => (
+                   {loading ? (
+                        <tr><td colSpan={5} className="text-center py-8 text-gray-500">جاري تحميل المستخدمين...</td></tr>
+                   ) : users.map(user => (
                        <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                            <td className="px-6 py-4 whitespace-nowrap">
                                <div className="flex items-center gap-3">
@@ -188,7 +198,7 @@ const UserManagement: React.FC = () => {
                     type="text"
                     required
                     value={formData.username}
-                    disabled={!!formData.id} // Cannot change username after creation
+                    disabled={!!formData.id} 
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none disabled:bg-gray-100"
                     />

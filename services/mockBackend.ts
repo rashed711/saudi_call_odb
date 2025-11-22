@@ -1,76 +1,93 @@
 
 import { ODBLocation, User, SiteSettings } from '../types';
 
-// This service mocks what your PHP/SQL backend would do.
-// In a real implementation, these functions would use fetch() to call your PHP endpoints.
+// ---------------------------------------------------------------------------
+// تم تحديث الرابط ليعمل على الاستضافة الحية (Production)
+// المسار: public_html/api/api.php -> https://start.enjaz.cloud/api/api.php
+// ---------------------------------------------------------------------------
+const API_BASE_URL = 'https://start.enjaz.cloud/api/api.php'; 
 
-const STORAGE_KEY_ODB = 'odb_data_v3';
-const STORAGE_KEY_USER_SESSION = 'odb_user_session';
-// Updated key to v2 to force refresh of user data with correct passwords
-const STORAGE_KEY_USERS_DB = 'odb_users_db_v2';
-const STORAGE_KEY_SETTINGS = 'odb_settings_v2'; // Updated key for new settings structure
+const STORAGE_KEY_USER_SESSION = 'odb_user_session_v2';
 
 const DEFAULT_SETTINGS: SiteSettings = {
     siteName: 'ODB Manager Pro',
-    primaryColor: '#1e40af', // blue-800
-    secondaryColor: '#1e293b', // slate-800
-    accentColor: '#3b82f6', // blue-500
-    searchRadius: 50, // 50 km default
-    maxResults: 20    // 20 items default
+    primaryColor: '#1e40af',
+    secondaryColor: '#1e293b',
+    accentColor: '#3b82f6',
+    searchRadius: 50,
+    maxResults: 20
 };
 
-const INITIAL_MOCK_USERS: User[] = [
-    { id: 1, username: 'admin', name: 'المدير العام', email: 'admin@example.com', role: 'admin', password: '123456', isActive: true },
-    { id: 2, username: 'user1', name: 'محمد أحمد', email: 'mohamed@example.com', role: 'user', password: '123456', isActive: true },
-    { id: 3, username: 'guest', name: 'زائر مؤقت', email: 'guest@example.com', role: 'user', password: '123456', isActive: false },
-];
+// --- HELPER: GENERIC FETCH WRAPPER ---
+async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null) {
+    // Append action to URL
+    const url = `${API_BASE_URL}?action=${action}`;
+    
+    const options: RequestInit = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        // Standard CORS mode
+        mode: 'cors'
+    };
 
-const INITIAL_MOCK_DATA: ODBLocation[] = [
-  { id: 1, ODB_ID: "101", CITYNAME: 'Cairo (Downtown)', LATITUDE: 30.0444, LONGITUDE: 31.2357 },
-  { id: 2, ODB_ID: "GZA-01", CITYNAME: 'Giza (Pyramids)', LATITUDE: 29.9792, LONGITUDE: 31.1342 },
-  { id: 3, ODB_ID: "ALX_ZN1", CITYNAME: 'Alexandria', LATITUDE: 31.2001, LONGITUDE: 29.9187 },
-  { id: 4, ODB_ID: "SHARM-100", CITYNAME: 'Sharm El Sheikh', LATITUDE: 27.9158, LONGITUDE: 34.3299 },
-  { id: 5, ODB_ID: "LUX-TEMPLE", CITYNAME: 'Luxor', LATITUDE: 25.6872, LONGITUDE: 32.6396 },
-  { id: 6, ODB_ID: "ASW-HIGH", CITYNAME: 'Aswan', LATITUDE: 24.0889, LONGITUDE: 32.8998 },
-  { id: 7, ODB_ID: "HRG-RED", CITYNAME: 'Hurghada', LATITUDE: 27.2579, LONGITUDE: 33.8116 },
-  { id: 8, ODB_ID: "108-B", CITYNAME: 'Mansoura', LATITUDE: 31.0409, LONGITUDE: 31.3785 },
-  { id: 9, ODB_ID: "TNT-09", CITYNAME: 'Tanta', LATITUDE: 30.7865, LONGITUDE: 31.0004 },
-  { id: 10, ODB_ID: "ISM-CANAL", CITYNAME: 'Ismailia', LATITUDE: 30.6043, LONGITUDE: 32.2723 },
-  { id: 11, ODB_ID: "PTS-PORT", CITYNAME: 'Port Said', LATITUDE: 31.2653, LONGITUDE: 32.3019 },
-  { id: 12, ODB_ID: "SUEZ-01", CITYNAME: 'Suez', LATITUDE: 29.9668, LONGITUDE: 32.5498 },
-];
-
-// --- USERS DB HELPER ---
-const getUsersDB = (): User[] => {
-    const data = localStorage.getItem(STORAGE_KEY_USERS_DB);
-    if (!data) {
-        localStorage.setItem(STORAGE_KEY_USERS_DB, JSON.stringify(INITIAL_MOCK_USERS));
-        return INITIAL_MOCK_USERS;
+    if (body) {
+        options.body = JSON.stringify(body);
     }
-    return JSON.parse(data);
-};
 
-const saveUsersDB = (users: User[]) => {
-    localStorage.setItem(STORAGE_KEY_USERS_DB, JSON.stringify(users));
-};
+    try {
+        const response = await fetch(url, options);
+        
+        // التحقق مما إذا كان السيرفر يرجع صفحة HTML (خطأ 404 أو 500) بدلاً من JSON
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") === -1) {
+             const text = await response.text();
+             console.error(`Server returned HTML instead of JSON at ${url}. Preview:`, text.substring(0, 150));
+             throw new Error(`خطأ في الرابط: السيرفر رد بصفحة HTML بدلاً من JSON. تأكد من مسار ملف api.php.`);
+        }
+
+        const text = await response.text();
+        
+        // محاولة قراءة الـ JSON
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error("JSON Parse Error. Response body:", text);
+            throw new Error('البيانات القادمة من السيرفر غير صالحة (Invalid JSON).');
+        }
+
+        if (response.ok) {
+            if (data.error) throw new Error(data.error);
+            return data;
+        } else {
+            throw new Error(data.error || `HTTP Error: ${response.status}`);
+        }
+    } catch (error: any) {
+        console.error(`API Request Failed [${action}]:`, error);
+        
+        // --- تشخيص ذكي للخطأ ---
+        if (error.message === 'Failed to fetch') {
+            // نحاول الاتصال بوضع no-cors لنرى هل السيرفر موجود أصلاً أم لا
+            try {
+                await fetch(url, { mode: 'no-cors', method: 'GET' });
+                // إذا وصلنا هنا، فهذا يعني أن السيرفر موجود واستقبل الطلب، لكن المتصفح حجبه بسبب CORS
+                throw new Error(`تم كشف السيرفر ولكن تم حظر الاتصال! \nالحل: يجب إضافة كود (header Access-Control-Allow-Origin) في ملف api.php.`);
+            } catch (innerError) {
+                // إذا فشل حتى no-cors، فهذا يعني أن الرابط خطأ أو السيرفر طافي
+                throw new Error(`تعذر الوصول للسيرفر نهائياً (${API_BASE_URL}). \nتأكد أن الرابط صحيح وأن الاستضافة تعمل.`);
+            }
+        }
+        throw error;
+    }
+}
 
 // --- AUTH ---
 export const mockLogin = async (username: string, pass: string): Promise<User> => {
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  const users = getUsersDB();
-  const foundUser = users.find(u => u.username === username && u.password === pass);
-
-  if (foundUser) {
-      if (!foundUser.isActive) {
-          throw new Error('تم إيقاف حسابك. يرجى مراجعة المسؤول.');
-      }
-      const { password, ...safeUser } = foundUser;
-      localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(safeUser));
-      return safeUser as User;
-  }
-  
-  throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
+    const user = await apiRequest('login', 'POST', { username, password: pass });
+    localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(user));
+    return user as User;
 };
 
 export const mockLogout = () => {
@@ -83,95 +100,51 @@ export const getSession = (): User | null => {
 };
 
 // --- USER MANAGEMENT ---
-export const getUsers = (): User[] => {
-    const users = getUsersDB();
-    // remove passwords from list view
-    return users.map(({ password, ...u }) => ({...u, password: ''} as User));
+export const getUsers = async (): Promise<User[]> => {
+    const users = await apiRequest('get_users');
+    return users.map((u: any) => ({
+        ...u,
+        id: Number(u.id),
+        isActive: u.isActive == 1 || u.isActive === true
+    }));
 };
 
-export const saveUser = (user: User) => {
-    let users = getUsersDB();
-    if (user.id) {
-        // Update
-        users = users.map(u => {
-            if (u.id === user.id) {
-                // Only update password if provided, else keep old
-                const newPass = user.password ? user.password : u.password;
-                return { ...u, ...user, password: newPass };
-            }
-            return u;
-        });
-    } else {
-        // Create
-        const maxId = users.reduce((max, u) => (u.id > max ? u.id : max), 0);
-        users.push({ ...user, id: maxId + 1 });
-    }
-    saveUsersDB(users);
-    return users;
+export const saveUser = async (user: User): Promise<void> => {
+    await apiRequest('save_user', 'POST', user);
 };
 
-export const deleteUser = (id: number) => {
-    let users = getUsersDB();
-    users = users.filter(u => u.id !== id);
-    saveUsersDB(users);
-    return users;
+export const deleteUser = async (id: number): Promise<void> => {
+    await apiRequest(`delete_user&id=${id}`, 'GET');
 };
 
-export const toggleUserStatus = (id: number) => {
-    let users = getUsersDB();
-    users = users.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u);
-    saveUsersDB(users);
-    return users;
+export const toggleUserStatus = async (id: number): Promise<void> => {
+    await apiRequest(`toggle_user_status&id=${id}`, 'GET');
 };
-
 
 // --- ODB LOCATIONS ---
-export const getODBLocations = (): ODBLocation[] => {
-  const data = localStorage.getItem(STORAGE_KEY_ODB);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(INITIAL_MOCK_DATA));
-    return INITIAL_MOCK_DATA;
-  }
-  return JSON.parse(data);
+export const getODBLocations = async (): Promise<ODBLocation[]> => {
+    const data = await apiRequest('get_locations');
+    return data.map((loc: any) => ({
+        ...loc,
+        id: Number(loc.id),
+        LATITUDE: Number(loc.LATITUDE),
+        LONGITUDE: Number(loc.LONGITUDE)
+    }));
 };
 
-export const saveODBLocation = (location: ODBLocation) => {
-  const current = getODBLocations();
-  const existingIndex = current.findIndex(l => l.id === location.id);
-  
-  if (existingIndex >= 0) {
-    current[existingIndex] = location;
-  } else {
-    const maxId = current.reduce((max, item) => (item.id > max ? item.id : max), 0);
-    location.id = maxId + 1;
-    current.push(location);
-  }
-  
-  localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(current));
-  return current;
+export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
+    await apiRequest('save_location', 'POST', location);
 };
 
-export const saveBulkODBLocations = (locations: Omit<ODBLocation, 'id'>[]) => {
-  const current = getODBLocations();
-  let maxId = current.reduce((max, item) => (item.id > max ? item.id : max), 0);
-  
-  const newEntries = locations.map((loc) => {
-    maxId++;
-    return { ...loc, id: maxId } as ODBLocation;
-  });
-
-  const updatedList = [...current, ...newEntries];
-  localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(updatedList));
-  return updatedList;
+export const saveBulkODBLocations = async (locations: Omit<ODBLocation, 'id'>[]): Promise<void> => {
+    await apiRequest('save_bulk_locations', 'POST', { locations });
 };
 
-export const deleteODBLocation = (id: number) => {
-  let current = getODBLocations();
-  current = current.filter(l => l.id !== id);
-  localStorage.setItem(STORAGE_KEY_ODB, JSON.stringify(current));
-  return current;
+export const deleteODBLocation = async (id: number): Promise<void> => {
+    await apiRequest(`delete_location&id=${id}`, 'GET');
 };
 
+// Helper: Calculate Distance (Client Side logic)
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371; 
   const dLat = deg2rad(lat2 - lat1);
@@ -190,27 +163,24 @@ function deg2rad(deg: number) {
 }
 
 // --- SITE SETTINGS ---
-export const getSiteSettings = (): SiteSettings => {
-    const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
-    if (data) {
-        const parsed = JSON.parse(data);
-        // Ensure new fields exist if loading old data
-        return { ...DEFAULT_SETTINGS, ...parsed };
+export const getSiteSettings = async (): Promise<SiteSettings> => {
+    try {
+        const settings = await apiRequest('get_settings');
+        return { ...DEFAULT_SETTINGS, ...settings, searchRadius: Number(settings.searchRadius), maxResults: Number(settings.maxResults) };
+    } catch (e) {
+        // Silent fail for settings to allow app to load
+        console.warn("Failed to load settings from API, using defaults");
+        return DEFAULT_SETTINGS;
     }
-    return DEFAULT_SETTINGS;
 };
 
-export const saveSiteSettings = (settings: SiteSettings) => {
-    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+export const saveSiteSettings = async (settings: SiteSettings): Promise<void> => {
+    await apiRequest('save_settings', 'POST', settings);
     applySiteSettings(settings);
-    return settings;
 };
 
 export const applySiteSettings = (settings: SiteSettings) => {
-    // Update Document Title
     document.title = settings.siteName;
-
-    // Update CSS Variables for Tailwind colors
     const root = document.documentElement;
     root.style.setProperty('--color-primary', settings.primaryColor);
     root.style.setProperty('--color-secondary', settings.secondaryColor);

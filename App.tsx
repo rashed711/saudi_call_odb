@@ -19,14 +19,16 @@ const App: React.FC = () => {
     const session = getSession();
     if (session) setUser(session);
 
-    const settings = getSiteSettings();
-    setSiteName(settings.siteName);
-    applySiteSettings(settings);
+    // Load settings from API
+    getSiteSettings().then(settings => {
+        setSiteName(settings.siteName);
+        applySiteSettings(settings);
+    });
     
-    const interval = setInterval(() => {
-        const s = getSiteSettings();
+    const interval = setInterval(async () => {
+        const s = await getSiteSettings();
         if (s.siteName !== siteName) setSiteName(s.siteName);
-    }, 1000);
+    }, 5000); // Increased interval to reduce server load
 
     return () => clearInterval(interval);
   }, [siteName]);

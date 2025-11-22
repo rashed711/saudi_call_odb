@@ -55,11 +55,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       (position) => {
         const { latitude, longitude } = position.coords;
         setUserCoords({ lat: latitude, lng: longitude });
-        // Simulate a brief network delay for better UX feel (Skeleton showcase)
-        setTimeout(() => {
-            processNearby(latitude, longitude);
-            setStatus('success');
-        }, 800);
+        processNearby(latitude, longitude);
       },
       (error) => {
         setStatus('error');
@@ -73,25 +69,35 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
     );
   };
 
-  const processNearby = (lat: number, lng: number) => {
-    const allLocations = getODBLocations();
-    const settings = getSiteSettings();
-    
-    let placesWithDistance = allLocations.map((loc) => {
-      const dist = calculateDistance(lat, lng, loc.LATITUDE, loc.LONGITUDE);
-      return { ...loc, distance: dist };
-    });
+  const processNearby = async (lat: number, lng: number) => {
+    try {
+        // Fetch both locations and settings asynchronously
+        const [allLocations, settings] = await Promise.all([
+            getODBLocations(),
+            getSiteSettings()
+        ]);
 
-    // 1. Sort by distance
-    placesWithDistance.sort((a, b) => a.distance - b.distance);
+        let placesWithDistance = allLocations.map((loc) => {
+          const dist = calculateDistance(lat, lng, loc.LATITUDE, loc.LONGITUDE);
+          return { ...loc, distance: dist };
+        });
 
-    // 2. Filter by Radius (if radius > 0)
-    if (settings.searchRadius > 0) {
-        placesWithDistance = placesWithDistance.filter(p => p.distance <= settings.searchRadius);
+        // 1. Sort by distance
+        placesWithDistance.sort((a, b) => a.distance - b.distance);
+
+        // 2. Filter by Radius (if radius > 0)
+        if (settings.searchRadius > 0) {
+            placesWithDistance = placesWithDistance.filter(p => p.distance <= settings.searchRadius);
+        }
+
+        // 3. Slice by maxResults
+        setNearbyPlaces(placesWithDistance.slice(0, settings.maxResults));
+        setStatus('success');
+    } catch (e) {
+        console.error(e);
+        setStatus('error');
+        setErrorMsg('فشل الاتصال بقاعدة البيانات');
     }
-
-    // 3. Slice by maxResults
-    setNearbyPlaces(placesWithDistance.slice(0, settings.maxResults));
   };
 
   const handleItemClick = (place: NearbyLocation) => {
@@ -131,7 +137,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       window.open(url, '_blank');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.CITYNAME || !formData.ODB_ID || !formData.id) {
         alert('حدث خطأ: بيانات الموقع غير مكتملة.');
         return;
@@ -150,36 +156,23 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
         lastEditedAt: now.toISOString(),
     };
 
-    saveODBLocation(locToSave);
+    try {
+        await saveODBLocation(locToSave);
 
-    setNearbyPlaces(prev => prev.map(p => {
-        if (p.id === locToSave.id) {
-            return { ...p, ...locToSave };
-        }
-        return p;
-    }));
+        setNearbyPlaces(prev => prev.map(p => {
+            if (p.id === locToSave.id) {
+                return { ...p, ...locToSave };
+            }
+            return p;
+        }));
 
-    showToast('تم حفظ التعديلات بنجاح');
-
-    setIsEditing(false);
-    setFormData(locToSave);
+        showToast('تم حفظ التعديلات بنجاح');
+        setIsEditing(false);
+        setFormData(locToSave);
+    } catch (e) {
+        alert('فشل الحفظ في قاعدة البيانات');
+    }
   };
-
-  const formatDate = (isoString?: string) => {
-      if (!isoString) return null;
-      try {
-          return new Intl.DateTimeFormat('ar-EG', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: 'numeric',
-          }).format(new Date(isoString));
-      } catch (e) {
-          return isoString;
-      }
-  };
-
-  const settings = getSiteSettings();
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -198,7 +191,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
           <div className="w-full md:w-auto">
             <h2 className="text-2xl md:text-3xl font-bold mb-2">الأماكن القريبة</h2>
             <p className="text-purple-100 opacity-90 text-sm md:text-base leading-relaxed max-w-lg">
-              استعراض أقرب {settings.maxResults} موقع في نطاق {settings.searchRadius > 0 ? `${settings.searchRadius} كم` : 'مفتوح'} من موقعك الحالي.
+               استعرض المواقع المسجلة في نطاقك الجغرافي الحالي.
             </p>
           </div>
           <button
@@ -328,9 +321,11 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
             </div>
 
             <div className="p-5 overflow-y-auto flex-1 overscroll-contain bg-gray-50/50">
-                {!isEditing ? (
-                    <div className="flex flex-col h-full gap-5">
-                        <div className="flex gap-4">
+                <div className="flex flex-col h-full gap-5">
+                    {!isEditing ? (
+                        // VIEW MODE
+                        <>
+                         <div className="flex gap-4">
                             <div 
                                 className="w-28 h-28 bg-white rounded-2xl shadow-sm border border-gray-200 p-1 shrink-0 cursor-pointer hover:border-primary transition-colors"
                                 onClick={() => formData.image && setZoomedImage(formData.image)}
@@ -373,69 +368,71 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                                 {formData.notes ? formData.notes : <span className="text-gray-300 italic">لا توجد ملاحظات...</span>}
                             </div>
                         </div>
-                    </div>
-                ) : (
-                    <div className="space-y-5">
-                         <div className="grid grid-cols-2 gap-3">
+                        </>
+                    ) : (
+                        // EDIT MODE
+                        <div className="space-y-5">
+                             <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Latitude</label>
+                                    <input
+                                        type="number" step="any" required
+                                        value={formData.LATITUDE}
+                                        onChange={(e) => setFormData({ ...formData, LATITUDE: parseFloat(e.target.value) })}
+                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-mono text-center focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Longitude</label>
+                                    <input
+                                        type="number" step="any" required
+                                        value={formData.LONGITUDE}
+                                        onChange={(e) => setFormData({ ...formData, LONGITUDE: parseFloat(e.target.value) })}
+                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-mono text-center focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
+                                    />
+                                </div>
+                             </div>
+
                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase">Latitude</label>
-                                <input
-                                    type="number" step="any" required
-                                    value={formData.LATITUDE}
-                                    onChange={(e) => setFormData({ ...formData, LATITUDE: parseFloat(e.target.value) })}
-                                    className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-mono text-center focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">الملاحظات</label>
+                                <textarea
+                                    value={formData.notes || ''}
+                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                    className="w-full p-4 bg-white border border-gray-200 rounded-xl text-sm h-32 focus:ring-2 focus:ring-primary outline-none resize-none shadow-sm transition-all"
+                                    placeholder="اكتب أي ملاحظات إضافية هنا..."
+                                ></textarea>
+                            </div>
+
+                            <div 
+                                onClick={triggerCamera}
+                                className="w-full h-20 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl flex flex-row items-center justify-center gap-3 text-blue-600 cursor-pointer active:bg-blue-100 hover:bg-blue-50/80 relative overflow-hidden transition-all group"
+                            >
+                                {formData.image ? (
+                                    <>
+                                        <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-30 grayscale group-hover:grayscale-0 transition-all" />
+                                        <div className="relative z-10 flex items-center gap-2 bg-white/90 px-4 py-1.5 rounded-full shadow-sm">
+                                            <Icons.Camera />
+                                            <span className="text-xs font-bold">تغيير الصورة</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="p-2 bg-white rounded-full shadow-sm"><Icons.Camera /></div>
+                                        <span className="text-xs font-bold">التقاط صورة</span>
+                                    </>
+                                )}
+                                <input 
+                                    ref={fileInputRef}
+                                    type="file" 
+                                    accept="image/*" 
+                                    capture="environment" 
+                                    className="hidden" 
+                                    onChange={handleImageCapture} 
                                 />
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase">Longitude</label>
-                                <input
-                                    type="number" step="any" required
-                                    value={formData.LONGITUDE}
-                                    onChange={(e) => setFormData({ ...formData, LONGITUDE: parseFloat(e.target.value) })}
-                                    className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-mono text-center focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
-                                />
-                            </div>
-                         </div>
-
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">الملاحظات</label>
-                            <textarea
-                                value={formData.notes || ''}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                className="w-full p-4 bg-white border border-gray-200 rounded-xl text-sm h-32 focus:ring-2 focus:ring-primary outline-none resize-none shadow-sm transition-all"
-                                placeholder="اكتب أي ملاحظات إضافية هنا..."
-                            ></textarea>
                         </div>
-
-                        <div 
-                            onClick={triggerCamera}
-                            className="w-full h-20 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl flex flex-row items-center justify-center gap-3 text-blue-600 cursor-pointer active:bg-blue-100 hover:bg-blue-50/80 relative overflow-hidden transition-all group"
-                        >
-                            {formData.image ? (
-                                <>
-                                    <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-30 grayscale group-hover:grayscale-0 transition-all" />
-                                    <div className="relative z-10 flex items-center gap-2 bg-white/90 px-4 py-1.5 rounded-full shadow-sm">
-                                        <Icons.Camera />
-                                        <span className="text-xs font-bold">تغيير الصورة</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="p-2 bg-white rounded-full shadow-sm"><Icons.Camera /></div>
-                                    <span className="text-xs font-bold">التقاط صورة</span>
-                                </>
-                            )}
-                            <input 
-                                ref={fileInputRef}
-                                type="file" 
-                                accept="image/*" 
-                                capture="environment" 
-                                className="hidden" 
-                                onChange={handleImageCapture} 
-                            />
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             <div className="p-4 border-t border-gray-100 bg-white shrink-0 pb-safe">

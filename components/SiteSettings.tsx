@@ -5,26 +5,33 @@ import { getSiteSettings, saveSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
 
 const SiteSettingsComponent: React.FC = () => {
-  const [settings, setSettings] = useState<SiteSettings>(getSiteSettings());
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [activeSection, setActiveSection] = useState<string | null>('general'); // 'general', 'appearance', 'search'
+  const [activeSection, setActiveSection] = useState<string | null>('general');
 
   useEffect(() => {
-      setSettings(getSiteSettings());
+      const load = async () => {
+          const data = await getSiteSettings();
+          setSettings(data);
+      };
+      load();
   }, []);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    saveSiteSettings(settings);
+    if (!settings) return;
+
+    await saveSiteSettings(settings);
     
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
-    setSettings({ ...settings });
   };
 
   const toggleSection = (section: string) => {
       setActiveSection(activeSection === section ? null : section);
   };
+
+  if (!settings) return <div className="p-8 text-center text-gray-500">جاري تحميل الإعدادات...</div>;
 
   return (
     <div className="max-w-3xl mx-auto">
