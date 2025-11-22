@@ -44,7 +44,6 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
              const text = await response.text();
              console.error(`Server returned HTML instead of JSON at ${url}. Preview:`, text.substring(0, 150));
              
-             // تحسين رسالة الخطأ لتكون أوضح للمستخدم في حالة وجود خطأ برمجي في PHP
              if (text.includes("Parse error") || text.includes("Fatal error") || text.includes("Syntax error")) {
                  throw new Error(`خطأ برمجي في ملف PHP (Syntax Error). تأكد من أنك كتبت require_once بشكل صحيح (كلمة واحدة).`);
              }
@@ -54,7 +53,6 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
 
         const text = await response.text();
         
-        // محاولة قراءة الـ JSON
         let data;
         try {
             data = JSON.parse(text);
@@ -72,15 +70,11 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
     } catch (error: any) {
         console.error(`API Request Failed [${action}]:`, error);
         
-        // --- تشخيص ذكي للخطأ ---
         if (error.message === 'Failed to fetch') {
-            // نحاول الاتصال بوضع no-cors لنرى هل السيرفر موجود أصلاً أم لا
             try {
                 await fetch(url, { mode: 'no-cors', method: 'GET' });
-                // إذا وصلنا هنا، فهذا يعني أن السيرفر موجود واستقبل الطلب، لكن المتصفح حجبه بسبب CORS
                 throw new Error(`تم كشف السيرفر ولكن تم حظر الاتصال (CORS)! \nالحل: تأكد من وجود كود الـ Header في ملف api.php على السيرفر الجديد.`);
             } catch (innerError) {
-                // إذا فشل حتى no-cors، فهذا يعني أن الرابط خطأ أو السيرفر طافي
                 throw new Error(`تعذر الوصول للسيرفر نهائياً (${API_BASE_URL}). \nتأكد أن الرابط صحيح وأن الاستضافة تعمل.`);
             }
         }
@@ -127,6 +121,8 @@ export const toggleUserStatus = async (id: number): Promise<void> => {
 };
 
 // --- ODB LOCATIONS ---
+
+// Legacy method (fetches all) - Used for NearbyPlaces to calculate client-side logic
 export const getODBLocations = async (): Promise<ODBLocation[]> => {
     const data = await apiRequest('get_locations');
     return data.map((loc: any) => ({
@@ -137,13 +133,31 @@ export const getODBLocations = async (): Promise<ODBLocation[]> => {
     }));
 };
 
+// New method (Server-side Pagination) - Used for ODBTable
+export const getODBLocationsPaginated = async (page: number, limit: number, search: string = ''): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
+    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET');
+    
+    const mappedData = result.data.map((loc: any) => ({
+        ...loc,
+        id: Number(loc.id),
+        LATITUDE: Number(loc.LATITUDE),
+        LONGITUDE: Number(loc.LONGITUDE)
+    }));
+
+    return {
+        data: mappedData,
+        total: Number(result.total),
+        totalPages: Number(result.totalPages)
+    };
+};
+
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
     await apiRequest('save_location', 'POST', location);
 };
 
 export const saveBulkODBLocations = async (locations: Omit<ODBLocation, 'id'>[]): Promise<{success: boolean, added: number, skipped: number}> => {
     const result = await apiRequest('save_bulk_locations', 'POST', { locations });
-    return result; // Returns { success: true, added: X, skipped: Y }
+    return result; 
 };
 
 export const deleteODBLocation = async (id: number): Promise<void> => {
@@ -174,7 +188,6 @@ export const getSiteSettings = async (): Promise<SiteSettings> => {
         const settings = await apiRequest('get_settings');
         return { ...DEFAULT_SETTINGS, ...settings, searchRadius: Number(settings.searchRadius), maxResults: Number(settings.maxResults) };
     } catch (e) {
-        // Silent fail for settings to allow app to load, but log error
         console.warn("Failed to load settings from API, using defaults. Check API connection.");
         return DEFAULT_SETTINGS;
     }

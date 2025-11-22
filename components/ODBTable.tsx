@@ -1,13 +1,21 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ODBLocation } from '../types';
-import { getODBLocations, saveODBLocation, deleteODBLocation, saveBulkODBLocations } from '../services/mockBackend';
+import { getODBLocationsPaginated, saveODBLocation, deleteODBLocation, saveBulkODBLocations } from '../services/mockBackend';
 import { Icons } from './Icons';
 
 const ODBTable: React.FC = () => {
   const [locations, setLocations] = useState<ODBLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Pagination & Search States
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20); // Number of items per page
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -29,11 +37,22 @@ const ODBTable: React.FC = () => {
     lastEditedAt: '',
   });
 
+  // Debounce search input
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          setDebouncedSearch(searchQuery);
+          setPage(1); // Reset to page 1 on new search
+      }, 500);
+      return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchLocations = async () => {
       setLoading(true);
       try {
-          const data = await getODBLocations();
-          setLocations(data);
+          const result = await getODBLocationsPaginated(page, limit, debouncedSearch);
+          setLocations(result.data);
+          setTotalItems(result.total);
+          setTotalPages(result.totalPages);
       } catch (error) {
           console.error("Error fetching locations:", error);
       } finally {
@@ -43,20 +62,11 @@ const ODBTable: React.FC = () => {
 
   useEffect(() => {
     fetchLocations();
-  }, []);
-
-  const filteredLocations = locations.filter(loc => {
-    const query = searchQuery.toLowerCase();
-    return (
-      loc.CITYNAME.toLowerCase().includes(query) ||
-      loc.ODB_ID.toLowerCase().includes(query) ||
-      loc.id.toString().includes(query)
-    );
-  });
+  }, [page, limit, debouncedSearch]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(filteredLocations.map(l => l.id));
+      setSelectedIds(locations.map(l => l.id));
     } else {
       setSelectedIds([]);
     }
@@ -129,7 +139,6 @@ const ODBTable: React.FC = () => {
     setIsSaving(true);
     setSaveError(null);
 
-    // توليد التاريخ الحالي بصيغة MySQL القياسية (YYYY-MM-DD HH:MM:SS) لتجنب أخطاء التنسيق
     const now = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     const formattedDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
@@ -172,7 +181,7 @@ const ODBTable: React.FC = () => {
 
   const handleImportClick = () => {
     if (fileInputRef.current) {
-        fileInputRef.current.value = ''; // Reset input
+        fileInputRef.current.value = ''; 
         fileInputRef.current.click();
     }
   };
@@ -196,14 +205,11 @@ const ODBTable: React.FC = () => {
             const line = lines[i].trim();
             if (!line) continue;
             
-            // Skip header
             if (i === 0 && (line.toLowerCase().includes('city') || line.toLowerCase().includes('name'))) continue;
             
-            // Try both comma and semicolon
             const separator = line.includes(';') ? ';' : ',';
             const cols = line.split(separator).map(c => c.trim().replace(/^"|"$/g, '')); 
             
-            // Ensure we have at least City, Lat, Lng
             if (cols.length < 3) continue; 
             
             const city = cols[0];
@@ -250,7 +256,7 @@ const ODBTable: React.FC = () => {
                 <input 
                     type="text" 
                     className="w-full pr-10 pl-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-sm"
-                    placeholder="ابحث باسم المدينة أو الكود..."
+                    placeholder="ابحث في السيرفر باسم المدينة أو الكود..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -264,7 +270,9 @@ const ODBTable: React.FC = () => {
         </div>
 
         <div className="flex justify-between items-center px-1">
-            <p className="text-xs text-gray-500 font-medium">{loading ? 'جاري التحميل...' : `${filteredLocations.length} موقع مسجل`}</p>
+            <p className="text-xs text-gray-500 font-medium">
+                {loading ? 'جاري التحميل...' : `إجمالي المواقع: ${totalItems}`}
+            </p>
             <button
                 onClick={handleImportClick}
                 disabled={isImporting || loading}
@@ -303,12 +311,12 @@ const ODBTable: React.FC = () => {
       )}
 
       {/* Desktop Table View */}
-      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[300px]">
         <table className="w-full text-right border-collapse">
           <thead className="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
             <tr>
               <th className="py-3 px-4 w-12 text-center">
-                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" onChange={handleSelectAll} checked={filteredLocations.length > 0 && selectedIds.length === filteredLocations.length} />
+                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" onChange={handleSelectAll} checked={locations.length > 0 && selectedIds.length === locations.length} />
               </th>
               <th className="py-3 px-4 font-semibold">المدينة</th>
               <th className="py-3 px-4 font-semibold">الإحداثيات</th>
@@ -318,8 +326,10 @@ const ODBTable: React.FC = () => {
           </thead>
           <tbody>
             {loading ? (
-                <tr><td colSpan={5} className="text-center py-10 text-gray-500">جاري الاتصال بقاعدة البيانات...</td></tr>
-            ) : filteredLocations.map((loc) => (
+                <tr><td colSpan={5} className="text-center py-20 text-gray-500"><div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></td></tr>
+            ) : locations.length === 0 ? (
+                 <tr><td colSpan={5} className="text-center py-10 text-gray-500">لا توجد بيانات</td></tr>
+            ) : locations.map((loc) => (
                 <tr key={loc.id} onClick={() => handleRowClick(loc)} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${selectedIds.includes(loc.id) ? 'bg-blue-50' : ''}`}>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" checked={selectedIds.includes(loc.id)} onChange={(e) => { e.stopPropagation(); handleSelectRow(loc.id); }} onClick={(e) => e.stopPropagation()} />
@@ -344,14 +354,13 @@ const ODBTable: React.FC = () => {
       </div>
 
       {/* Mobile App Card View */}
-      <div className="md:hidden space-y-3 pb-44">
-        {loading && (
+      <div className="md:hidden space-y-3 pb-4">
+        {loading ? (
             <div className="flex flex-col gap-3">
                 {[1,2,3].map(i => <div key={i} className="h-24 bg-gray-200 rounded-xl animate-pulse"></div>)}
             </div>
-        )}
-        
-        {!loading && filteredLocations.map((loc) => (
+        ) : locations.length > 0 ? (
+            locations.map((loc) => (
             <div 
                 key={loc.id} 
                 className={`bg-white rounded-2xl p-4 shadow-sm border active:scale-[0.98] transition-transform ${selectedIds.includes(loc.id) ? 'border-primary bg-blue-50/30' : 'border-gray-100'}`}
@@ -393,15 +402,39 @@ const ODBTable: React.FC = () => {
                      </button>
                 </div>
             </div>
-        ))}
-        
-        {!loading && filteredLocations.length === 0 && (
+        ))
+        ) : (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                 <Icons.Search />
                 <p className="mt-2 text-sm">لا توجد نتائج</p>
             </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {locations.length > 0 && (
+        <div className="flex justify-center items-center gap-4 py-6 pb-28 md:pb-6">
+            <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1 || loading}
+                className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-full shadow-sm disabled:opacity-50 hover:bg-gray-50"
+            >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            
+            <span className="text-sm font-medium text-gray-600">
+                صفحة <span className="font-bold text-gray-900">{page}</span> من {totalPages}
+            </span>
+
+            <button 
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages || loading}
+                className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-full shadow-sm disabled:opacity-50 hover:bg-gray-50"
+            >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+        </div>
+      )}
 
       {/* Full Screen Modal */}
       {isModalOpen && (
