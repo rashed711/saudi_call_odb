@@ -12,6 +12,8 @@ const ODBTable: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null); 
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -68,6 +70,7 @@ const ODBTable: React.FC = () => {
 
   const handleRowClick = (loc: ODBLocation) => {
     setFormData({ ...loc });
+    setSaveError(null);
     setIsModalOpen(true);
   };
 
@@ -98,6 +101,7 @@ const ODBTable: React.FC = () => {
     const locationToEdit = locations.find(l => l.id === idToEdit);
     if (locationToEdit) {
       setFormData({ ...locationToEdit });
+      setSaveError(null);
       setIsModalOpen(true);
     }
   };
@@ -114,12 +118,21 @@ const ODBTable: React.FC = () => {
         lastEditedBy: '',
         lastEditedAt: ''
     });
+    setSaveError(null);
     setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.CITYNAME || !formData.ODB_ID) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    // توليد التاريخ الحالي بصيغة MySQL القياسية (YYYY-MM-DD HH:MM:SS) لتجنب أخطاء التنسيق
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const formattedDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
     const newLoc: ODBLocation = {
       id: formData.id || 0, 
@@ -129,14 +142,21 @@ const ODBTable: React.FC = () => {
       LONGITUDE: Number(formData.LONGITUDE),
       image: formData.image,
       notes: formData.notes,
-      lastEditedBy: formData.lastEditedBy, 
-      lastEditedAt: formData.lastEditedAt 
+      lastEditedBy: formData.lastEditedBy || 'Admin',
+      lastEditedAt: formattedDate
     };
 
-    await saveODBLocation(newLoc);
-    fetchLocations();
-    setIsModalOpen(false);
-    setSelectedIds([]); 
+    try {
+        await saveODBLocation(newLoc);
+        await fetchLocations();
+        setIsModalOpen(false);
+        setSelectedIds([]); 
+    } catch (err: any) {
+        console.error(err);
+        setSaveError(err.message || "حدث خطأ أثناء حفظ البيانات");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,46 +171,65 @@ const ODBTable: React.FC = () => {
   };
 
   const handleImportClick = () => {
-    fileInputRef.current?.click();
+    if (fileInputRef.current) {
+        fileInputRef.current.value = ''; // Reset input
+        fileInputRef.current.click();
+    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    
     setIsImporting(true);
     const reader = new FileReader();
+    
     reader.onload = async (e) => {
       try {
         const text = e.target?.result as string;
+        if (!text) return;
+
         const lines = text.split(/\r\n|\n/);
         const newLocations: Omit<ODBLocation, 'id'>[] = [];
+        
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
+            
+            // Skip header
             if (i === 0 && (line.toLowerCase().includes('city') || line.toLowerCase().includes('name'))) continue;
+            
+            // Try both comma and semicolon
             const separator = line.includes(';') ? ';' : ',';
             const cols = line.split(separator).map(c => c.trim().replace(/^"|"$/g, '')); 
+            
+            // Ensure we have at least City, Lat, Lng
             if (cols.length < 3) continue; 
+            
             const city = cols[0];
             const lat = parseFloat(cols[1]);
             const lng = parseFloat(cols[2]);
-            const odbId = cols[3] || `CSV-${Date.now()}-${i}`;
+            const odbId = cols[3] || `CSV-${Math.floor(Math.random() * 10000)}-${i}`;
+            
             if (city && !isNaN(lat) && !isNaN(lng)) {
                 newLocations.push({ CITYNAME: city, LATITUDE: lat, LONGITUDE: lng, ODB_ID: odbId });
             }
         }
+
         if (newLocations.length > 0) {
-            if (window.confirm(`تم قراءة ${newLocations.length} موقع. هل تريد إضافتهم؟`)) {
-                await saveBulkODBLocations(newLocations);
+            if (window.confirm(`تم العثور على ${newLocations.length} موقع صالح في الملف.\nسيتم استيرادها وتجاهل أي ODB_ID مكرر موجود مسبقاً.\nهل تريد المتابعة؟`)) {
+                const result = await saveBulkODBLocations(newLocations);
+                alert(`تقرير الاستيراد:\n\n✅ تمت الإضافة: ${result.added} موقع\n⚠️ تم التخطي (مكرر): ${result.skipped} موقع`);
                 fetchLocations();
             }
+        } else {
+            alert("عذراً، لم يتم العثور على بيانات صالحة في الملف.\nتأكد من التنسيق: المدينة, خط العرض, خط الطول, كود_الموقع");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        alert('خطأ في الملف');
+        alert('حدث خطأ أثناء معالجة الملف: ' + err.message);
       } finally {
         setIsImporting(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
     reader.readAsText(file);
@@ -229,9 +268,13 @@ const ODBTable: React.FC = () => {
             <button
                 onClick={handleImportClick}
                 disabled={isImporting || loading}
-                className="text-xs flex items-center gap-1 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors font-bold"
+                className="text-xs flex items-center gap-1 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors font-bold disabled:opacity-50"
             >
-                {isImporting ? 'جاري التحميل...' : <><Icons.Upload /> <span>استيراد CSV</span></>}
+                {isImporting ? (
+                    <><span className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></span> <span>جاري المعالجة...</span></>
+                ) : (
+                    <><Icons.Upload /> <span>استيراد CSV</span></>
+                )}
             </button>
         </div>
       </div>
@@ -376,6 +419,13 @@ const ODBTable: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
                 <form id="locationForm" onSubmit={handleSave} className="space-y-4">
                     
+                    {saveError && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2 animate-in slide-in-from-top-2">
+                            <Icons.Ban />
+                            <span>{saveError}</span>
+                        </div>
+                    )}
+
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">اسم المدينة</label>
@@ -449,8 +499,18 @@ const ODBTable: React.FC = () => {
             </div>
             
              <div className="p-4 bg-white border-t border-gray-100 shrink-0 pb-safe">
-                <button form="locationForm" type="submit" className="w-full bg-primary text-white font-bold text-lg py-3.5 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-transform">
-                    حفظ البيانات
+                <button 
+                    form="locationForm" 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="w-full bg-primary text-white font-bold text-lg py-3.5 rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition-transform disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                    {isSaving ? (
+                        <>
+                             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                             <span>جاري الحفظ...</span>
+                        </>
+                    ) : 'حفظ البيانات'}
                 </button>
             </div>
 

@@ -7,12 +7,19 @@ import { Icons } from './Icons';
 const SiteSettingsComponent: React.FC = () => {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>('general');
 
   useEffect(() => {
       const load = async () => {
-          const data = await getSiteSettings();
-          setSettings(data);
+          try {
+            const data = await getSiteSettings();
+            setSettings(data);
+          } catch (e) {
+            console.error(e);
+            setError("فشل تحميل الإعدادات");
+          }
       };
       load();
   }, []);
@@ -20,11 +27,20 @@ const SiteSettingsComponent: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settings) return;
-
-    await saveSiteSettings(settings);
     
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setSaving(true);
+    setError(null);
+    
+    try {
+        await saveSiteSettings(settings);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+    } catch (e: any) {
+        console.error(e);
+        setError(e.message || "حدث خطأ أثناء حفظ الإعدادات");
+    } finally {
+        setSaving(false);
+    }
   };
 
   const toggleSection = (section: string) => {
@@ -44,6 +60,12 @@ const SiteSettingsComponent: React.FC = () => {
             <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold animate-in fade-in slide-in-from-top-2">
                 <Icons.Check />
                 <span>تم حفظ التعديلات</span>
+            </div>
+        )}
+        {error && (
+             <div className="bg-red-100 text-red-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold animate-in fade-in slide-in-from-top-2">
+                <Icons.Ban />
+                <span>{error}</span>
             </div>
         )}
       </div>
@@ -239,10 +261,20 @@ const SiteSettingsComponent: React.FC = () => {
         <div className="pt-4 flex justify-end">
             <button 
                 type="submit"
-                className="w-full md:w-auto bg-primary text-white px-8 py-3.5 rounded-xl font-bold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                disabled={saving}
+                className="w-full md:w-auto bg-primary text-white px-8 py-3.5 rounded-xl font-bold hover:opacity-90 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
             >
-                <Icons.Check />
-                <span>حفظ جميع الإعدادات</span>
+                {saving ? (
+                    <>
+                        <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></span>
+                        <span>جاري الحفظ...</span>
+                    </>
+                ) : (
+                    <>
+                        <Icons.Check />
+                        <span>حفظ جميع الإعدادات</span>
+                    </>
+                )}
             </button>
         </div>
 

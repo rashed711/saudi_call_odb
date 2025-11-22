@@ -1,3 +1,4 @@
+
 import { ODBLocation, User, SiteSettings } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -140,8 +141,9 @@ export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
     await apiRequest('save_location', 'POST', location);
 };
 
-export const saveBulkODBLocations = async (locations: Omit<ODBLocation, 'id'>[]): Promise<void> => {
-    await apiRequest('save_bulk_locations', 'POST', { locations });
+export const saveBulkODBLocations = async (locations: Omit<ODBLocation, 'id'>[]): Promise<{success: boolean, added: number, skipped: number}> => {
+    const result = await apiRequest('save_bulk_locations', 'POST', { locations });
+    return result; // Returns { success: true, added: X, skipped: Y }
 };
 
 export const deleteODBLocation = async (id: number): Promise<void> => {

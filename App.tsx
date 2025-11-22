@@ -19,19 +19,32 @@ const App: React.FC = () => {
     const session = getSession();
     if (session) setUser(session);
 
-    // Load settings from API
-    getSiteSettings().then(settings => {
-        setSiteName(settings.siteName);
-        applySiteSettings(settings);
-    });
+    // تحميل الإعدادات عند فتح التطبيق
+    const loadSettings = async () => {
+        try {
+            const settings = await getSiteSettings();
+            setSiteName(settings.siteName);
+            applySiteSettings(settings);
+        } catch (e) {
+            console.error("Failed to load initial settings", e);
+        }
+    };
+    loadSettings();
     
+    // التحقق الدوري من تحديثات الإعدادات (كل 5 ثواني)
+    // هذا يضمن أن التغييرات تظهر لجميع المستخدمين وتطبق الألوان الجديدة فوراً
     const interval = setInterval(async () => {
-        const s = await getSiteSettings();
-        if (s.siteName !== siteName) setSiteName(s.siteName);
-    }, 5000); // Increased interval to reduce server load
+        try {
+            const s = await getSiteSettings();
+            setSiteName(s.siteName);
+            applySiteSettings(s);
+        } catch (e) {
+            // تجاهل الأخطاء في الخلفية
+        }
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [siteName]);
+  }, []);
 
   const handleLoginSuccess = (u: User) => {
     setUser(u);
