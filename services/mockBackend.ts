@@ -1,12 +1,33 @@
 
-import { ODBLocation, User, SiteSettings, NearbyLocation } from '../types';
+import { ODBLocation, User, SiteSettings, NearbyLocation, Permission } from '../types';
 
-// ---------------------------------------------------------------------------
-// تم تحديث الرابط ليعمل على الاستضافة الجديدة (Cloud)
-// ---------------------------------------------------------------------------
 const API_BASE_URL = 'https://start.enjaz.cloud/api/api.php'; 
+const STORAGE_KEY_USER_SESSION = 'odb_user_session_v3_perm';
 
-const STORAGE_KEY_USER_SESSION = 'odb_user_session_v2';
+// --- DEFAULT PERMISSIONS TEMPLATES ---
+const ADMIN_PERMISSIONS: Permission[] = [
+    { resource: 'dashboard', actions: ['view'] },
+    { resource: 'odb', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+    { resource: 'nearby', actions: ['view', 'create', 'edit'] },
+    { resource: 'users', actions: ['view', 'create', 'edit', 'delete'] },
+    { resource: 'settings', actions: ['view', 'edit'] },
+    { resource: 'my_activity', actions: ['view'] }
+];
+
+const SUPERVISOR_PERMISSIONS: Permission[] = [
+    { resource: 'dashboard', actions: ['view'] },
+    { resource: 'odb', actions: ['view', 'create', 'edit'] }, // No delete
+    { resource: 'nearby', actions: ['view'] },
+    { resource: 'users', actions: ['view', 'create', 'edit'] }, // Manage their delegates only
+    { resource: 'my_activity', actions: ['view'] }
+];
+
+const DELEGATE_PERMISSIONS: Permission[] = [
+    { resource: 'dashboard', actions: ['view'] },
+    { resource: 'odb', actions: ['view'] }, // View only global list
+    { resource: 'nearby', actions: ['view'] },
+    { resource: 'my_activity', actions: ['view', 'edit'] } // Can edit their own work
+];
 
 const DEFAULT_SETTINGS: SiteSettings = {
     siteName: 'ODB Manager Pro',
@@ -17,50 +38,26 @@ const DEFAULT_SETTINGS: SiteSettings = {
     maxResults: 20
 };
 
-// --- HELPER: GENERIC FETCH WRAPPER ---
+// --- HELPER ---
 async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null, signal?: AbortSignal) {
-    // Append action to URL
     const url = `${API_BASE_URL}?action=${action}`;
-    
     const options: RequestInit = {
         method,
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        // Standard CORS mode
+        headers: { 'Content-Type': 'application/json' },
         mode: 'cors',
-        signal // Pass the abort signal
+        signal
     };
-
-    if (body) {
-        options.body = JSON.stringify(body);
-    }
+    if (body) options.body = JSON.stringify(body);
 
     try {
         const response = await fetch(url, options);
-        
-        // التحقق مما إذا كان السيرفر يرجع صفحة HTML (خطأ 404 أو 500) بدلاً من JSON
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") === -1) {
-             const text = await response.text();
-             console.error(`Server returned HTML instead of JSON at ${url}. Preview:`, text.substring(0, 150));
-             
-             if (text.includes("Parse error") || text.includes("Fatal error") || text.includes("Syntax error")) {
-                 throw new Error(`خطأ برمجي في ملف PHP (Syntax Error). تأكد من أنك كتبت require_once بشكل صحيح (كلمة واحدة).`);
-             }
-             
-             throw new Error(`خطأ في الرابط: السيرفر رد بصفحة HTML بدلاً من JSON. تأكد من مسار ملف api.php.`);
+             throw new Error(`Server Error (HTML response)`);
         }
-
         const text = await response.text();
-        
         let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error("JSON Parse Error. Response body:", text);
-            throw new Error('البيانات القادمة من السيرفر غير صالحة (Invalid JSON).');
-        }
+        try { data = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON'); }
 
         if (response.ok) {
             if (data.error) throw new Error(data.error);
@@ -69,28 +66,37 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
             throw new Error(data.error || `HTTP Error: ${response.status}`);
         }
     } catch (error: any) {
-        if (error.name === 'AbortError') {
-            throw error; // Let the caller handle aborts (usually ignore)
-        }
+        if (error.name === 'AbortError') throw error;
         console.error(`API Request Failed [${action}]:`, error);
-        
-        if (error.message === 'Failed to fetch') {
-            try {
-                await fetch(url, { mode: 'no-cors', method: 'GET' });
-                throw new Error(`تم كشف السيرفر ولكن تم حظر الاتصال (CORS)! \nالحل: تأكد من وجود كود الـ Header في ملف api.php على السيرفر الجديد.`);
-            } catch (innerError) {
-                throw new Error(`تعذر الوصول للسيرفر نهائياً (${API_BASE_URL}). \nتأكد أن الرابط صحيح وأن الاستضافة تعمل.`);
-            }
-        }
         throw error;
     }
 }
 
-// --- AUTH ---
+// --- AUTH & PERMISSIONS ---
 export const mockLogin = async (username: string, pass: string): Promise<User> => {
+    // Real login to verify credentials
     const user = await apiRequest('login', 'POST', { username, password: pass });
-    localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(user));
-    return user as User;
+    
+    // INJECT PERMISSIONS (Simulation since DB might not have them yet)
+    // In a real app, these come from the DB. Here we attach defaults if missing.
+    let finalUser = { ...user };
+    // Parse permissions if they come as string from DB
+    if (typeof finalUser.permissions === 'string') {
+        try { finalUser.permissions = JSON.parse(finalUser.permissions); } catch(e) { finalUser.permissions = null; }
+    }
+
+    if (!finalUser.permissions || !Array.isArray(finalUser.permissions)) {
+        if (finalUser.role === 'admin') finalUser.permissions = ADMIN_PERMISSIONS;
+        else if (finalUser.role === 'supervisor') finalUser.permissions = SUPERVISOR_PERMISSIONS;
+        else finalUser.permissions = DELEGATE_PERMISSIONS;
+    }
+    
+    // Normalize ID
+    finalUser.id = Number(finalUser.id);
+    finalUser.supervisorId = finalUser.supervisorId ? Number(finalUser.supervisorId) : null;
+
+    localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(finalUser));
+    return finalUser as User;
 };
 
 export const mockLogout = () => {
@@ -102,18 +108,48 @@ export const getSession = (): User | null => {
   return data ? JSON.parse(data) : null;
 };
 
-// --- USER MANAGEMENT ---
-export const getUsers = async (): Promise<User[]> => {
-    const users = await apiRequest('get_users');
-    return users.map((u: any) => ({
-        ...u,
-        id: Number(u.id),
-        isActive: u.isActive == 1 || u.isActive === true
-    }));
+// Helper to check permissions
+export const hasPermission = (user: User, resource: string, action: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'admin') return true; // Admin has all power
+    const resPerm = user.permissions.find(p => p.resource === resource);
+    return resPerm ? resPerm.actions.includes(action as any) : false;
 };
 
-export const saveUser = async (user: User): Promise<void> => {
-    await apiRequest('save_user', 'POST', user);
+// --- USER MANAGEMENT (HIERARCHY AWARE) ---
+export const getUsers = async (currentUser: User): Promise<User[]> => {
+    const allUsers = await apiRequest('get_users');
+    
+    // Map & Clean
+    let usersList = allUsers.map((u: any) => ({
+        ...u,
+        id: Number(u.id),
+        supervisorId: u.supervisorId ? Number(u.supervisorId) : null,
+        isActive: u.isActive == 1 || u.isActive === true,
+        permissions: u.permissions ? (typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions) : (u.role === 'admin' ? ADMIN_PERMISSIONS : (u.role === 'supervisor' ? SUPERVISOR_PERMISSIONS : DELEGATE_PERMISSIONS))
+    }));
+
+    // HIERARCHY FILTER
+    if (currentUser.role === 'supervisor') {
+        // Supervisor sees only themselves and their delegates
+        return usersList.filter((u: User) => u.id === currentUser.id || u.supervisorId === currentUser.id);
+    } else if (currentUser.role === 'delegate') {
+        // Delegate sees only themselves
+        return usersList.filter((u: User) => u.id === currentUser.id);
+    }
+
+    // Admin sees everyone
+    return usersList;
+};
+
+export const saveUser = async (userToSave: User): Promise<void> => {
+    // Convert permissions array to string for DB storage
+    const payload = {
+        ...userToSave,
+        permissions: userToSave.permissions // Send as array, let PHP encode it
+    };
+    
+    await apiRequest('save_user', 'POST', payload);
 };
 
 export const deleteUser = async (id: number): Promise<void> => {
@@ -124,38 +160,23 @@ export const toggleUserStatus = async (id: number): Promise<void> => {
     await apiRequest(`toggle_user_status&id=${id}`, 'GET');
 };
 
-// --- ODB LOCATIONS ---
+// --- LOCATIONS & ACTIVITY ---
 
-// Legacy method (DEPRECATED for large datasets)
-export const getODBLocations = async (): Promise<ODBLocation[]> => {
-    const data = await apiRequest('get_locations');
-    return data.map((loc: any) => ({
+export const getODBLocationsPaginated = async (page: number, limit: number, search: string = '', signal?: AbortSignal): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
+    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
+    const mappedData = result.data.map((loc: any) => ({
         ...loc,
         id: Number(loc.id),
         LATITUDE: Number(loc.LATITUDE),
         LONGITUDE: Number(loc.LONGITUDE)
     }));
+    return { data: mappedData, total: Number(result.total), totalPages: Number(result.totalPages) };
 };
 
-// Server-Side Nearby Search (Highly Efficient)
-export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: number, limit: number): Promise<NearbyLocation[]> => {
-    // If radius is 0 (unlimited), we pass a very large number to SQL
-    const effectiveRadius = radius === 0 ? 20000 : radius;
-    
-    const data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
-    
-    return data.map((loc: any) => ({
-        ...loc,
-        id: Number(loc.id),
-        LATITUDE: Number(loc.LATITUDE),
-        LONGITUDE: Number(loc.LONGITUDE),
-        distance: Number(loc.distance) // SQL calculates this now
-    }));
-};
-
-// New method (Server-side Pagination) - Used for ODBTable
-export const getODBLocationsPaginated = async (page: number, limit: number, search: string = '', signal?: AbortSignal): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
-    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
+// NEW: Get My Activity (Filtered by username/editor)
+export const getMyActivity = async (username: string, page: number = 1, limit: number = 20): Promise<{data: ODBLocation[], total: number}> => {
+    // We rely on 'search' which backend now supports searching by 'last_edited_by'
+    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(username)}`, 'GET');
     
     const mappedData = result.data.map((loc: any) => ({
         ...loc,
@@ -163,12 +184,20 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
         LATITUDE: Number(loc.LATITUDE),
         LONGITUDE: Number(loc.LONGITUDE)
     }));
+    
+    return { data: mappedData, total: Number(result.total) };
+};
 
-    return {
-        data: mappedData,
-        total: Number(result.total),
-        totalPages: Number(result.totalPages)
-    };
+export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: number, limit: number): Promise<NearbyLocation[]> => {
+    const effectiveRadius = radius === 0 ? 20000 : radius;
+    const data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
+    return data.map((loc: any) => ({
+        ...loc,
+        id: Number(loc.id),
+        LATITUDE: Number(loc.LATITUDE),
+        LONGITUDE: Number(loc.LONGITUDE),
+        distance: Number(loc.distance)
+    }));
 };
 
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
@@ -184,31 +213,12 @@ export const deleteODBLocation = async (id: number): Promise<void> => {
     await apiRequest(`delete_location&id=${id}`, 'GET');
 };
 
-// Helper: Calculate Distance (Client Side logic - Keeping it for fallback if needed)
-export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371; 
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; 
-  return d;
-};
-
-function deg2rad(deg: number) {
-  return deg * (Math.PI / 180);
-}
-
 // --- SITE SETTINGS ---
 export const getSiteSettings = async (): Promise<SiteSettings> => {
     try {
         const settings = await apiRequest('get_settings');
         return { ...DEFAULT_SETTINGS, ...settings, searchRadius: Number(settings.searchRadius), maxResults: Number(settings.maxResults) };
     } catch (e) {
-        console.warn("Failed to load settings from API, using defaults. Check API connection.");
         return DEFAULT_SETTINGS;
     }
 };

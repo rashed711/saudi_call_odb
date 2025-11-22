@@ -1,28 +1,38 @@
 
+export type PermissionResource = 'dashboard' | 'odb' | 'nearby' | 'users' | 'settings' | 'my_activity';
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'export';
+
+export interface Permission {
+  resource: PermissionResource;
+  actions: PermissionAction[];
+}
+
 export interface User {
   id: number;
   username: string;
   name: string;
   email: string;
-  password?: string; // Only used for creating/updating, not always returned
-  role: 'admin' | 'user';
+  password?: string;
+  role: 'admin' | 'supervisor' | 'delegate'; // Admin, Supervisor, Delegate
+  supervisorId?: number | null; // If user is delegate, who is their supervisor?
   isActive: boolean;
+  permissions: Permission[]; // Custom permissions list
 }
 
 export interface ODBLocation {
-  id: number; // System internal ID (Auto-increment, Unique)
-  ODB_ID: string; // Business Logic ID (Alphanumeric & Symbols)
+  id: number; 
+  ODB_ID: string; 
   CITYNAME: string;
   LATITUDE: number;
   LONGITUDE: number;
-  image?: string; // Base64 string for the image
-  notes?: string; // User notes
+  image?: string; 
+  notes?: string; 
   lastEditedBy?: string;
   lastEditedAt?: string;
 }
 
 export interface NearbyLocation extends ODBLocation {
-  distance: number; // in kilometers
+  distance: number; 
 }
 
 export interface SiteSettings {
@@ -30,8 +40,8 @@ export interface SiteSettings {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
-  searchRadius: number; // in Kilometers (0 = unlimited)
-  maxResults: number;   // Number of items to show
+  searchRadius: number; 
+  maxResults: number;   
 }
 
 export enum View {
@@ -42,4 +52,5 @@ export enum View {
   USERS = 'USERS',
   PROFILE = 'PROFILE',
   NEARBY = 'NEARBY',
+  MY_ACTIVITY = 'MY_ACTIVITY', // New View for Delegates
 }

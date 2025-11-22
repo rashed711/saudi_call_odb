@@ -71,19 +71,13 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
   const processNearby = async (lat: number, lng: number) => {
     try {
-        // 1. Fetch settings first to know Radius and Limit
         const settings = await getSiteSettings();
-
-        // 2. Call the optimized Server-Side API
-        // This sends coordinates to server, server returns ONLY nearby places
-        // This prevents "Invalid JSON" errors due to memory exhaustion
         const places = await getNearbyLocationsAPI(
             lat, 
             lng, 
             settings.searchRadius, 
             settings.maxResults
         );
-
         setNearbyPlaces(places);
         setStatus('success');
     } catch (e: any) {
@@ -122,10 +116,18 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       fileInputRef.current?.click();
   };
 
-  const handleGetDirections = () => {
+  const handleGetDirections = (e?: React.MouseEvent) => {
+      if(e) e.stopPropagation();
       if (!formData.LATITUDE || !formData.LONGITUDE) return;
 
       const dest = `${formData.LATITUDE},${formData.LONGITUDE}`;
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+      window.open(url, '_blank');
+  };
+
+  const handleDirectDirections = (e: React.MouseEvent, lat: number, lng: number) => {
+      e.stopPropagation();
+      const dest = `${lat},${lng}`;
       const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
       window.open(url, '_blank');
   };
@@ -154,7 +156,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
         setNearbyPlaces(prev => prev.map(p => {
             if (p.id === locToSave.id) {
-                return { ...p, ...locToSave };
+                return { ...p, ...locToSave, distance: (p as NearbyLocation).distance };
             }
             return p;
         }));
@@ -168,7 +170,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
   };
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="flex flex-col h-full space-y-3">
       
       {/* Success Toast */}
       {toastMsg && (
@@ -178,315 +180,164 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
           </div>
       )}
 
-      <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white opacity-5 rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="w-full md:w-auto">
-            <h2 className="text-2xl md:text-3xl font-bold mb-2">الأماكن القريبة</h2>
-            <p className="text-purple-100 opacity-90 text-sm md:text-base leading-relaxed max-w-lg">
-               استعرض المواقع المسجلة في نطاقك الجغرافي الحالي.
-            </p>
-          </div>
-          <button
-            onClick={handleGetLocation}
-            disabled={status === 'loading'}
-            className="w-full md:w-auto bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white hover:text-purple-700 px-6 py-3 rounded-xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 whitespace-nowrap"
-          >
-            {status === 'loading' ? (
-              <span className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></span>
-            ) : (
-              <Icons.MapPin />
-            )}
-            <span>تحديث موقعي</span>
-          </button>
-        </div>
-
-        {userCoords && (
-            <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-2 text-xs font-mono text-purple-200/80">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span>GPS Active:</span>
-                <span dir="ltr">{userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}</span>
+      {/* Top Banner - Reduced Size & Compact */}
+      <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl p-3 md:p-4 text-white shadow-lg relative overflow-hidden shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div className="flex items-center justify-between w-full md:w-auto">
+            <div className="min-w-0">
+                <h2 className="text-base md:text-lg font-bold leading-tight flex items-center gap-2">
+                    <Icons.MapPin /> 
+                    الأماكن القريبة
+                </h2>
+                <div className="flex items-center gap-2 text-[10px] md:text-xs text-purple-100 opacity-90 mt-1">
+                    {status === 'success' ? (
+                        <span className="bg-white/20 px-1.5 py-0.5 rounded font-bold">
+                             {nearbyPlaces.length} موقع
+                        </span>
+                    ) : (
+                        <span>استكشف محيطك</span>
+                    )}
+                    {userCoords && <span className="opacity-70">| {userCoords.lat.toFixed(4)}, {userCoords.lng.toFixed(4)}</span>}
+                </div>
             </div>
-        )}
+            
+            <button
+                onClick={handleGetLocation}
+                disabled={status === 'loading'}
+                className="md:hidden bg-white/10 backdrop-blur-md border border-white/20 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm flex items-center gap-1 active:bg-white/20"
+            >
+                {status === 'loading' ? <span className="w-3 h-3 border border-white rounded-full animate-spin"></span> : <Icons.Search />}
+                <span>تحديث</span>
+            </button>
+        </div>
+        
+        <div className="hidden md:block">
+            <button
+                onClick={handleGetLocation}
+                disabled={status === 'loading'}
+                className="bg-white/10 hover:bg-white hover:text-purple-700 backdrop-blur-md border border-white/20 text-white px-4 py-1.5 rounded-lg font-bold text-xs shadow-sm transition-all active:scale-95 flex items-center gap-2"
+            >
+                {status === 'loading' ? <span className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"></span> : <Icons.Search />}
+                <span>تحديث الموقع</span>
+            </button>
+        </div>
       </div>
 
       {status === 'error' && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 text-center text-sm md:text-base flex flex-col items-center gap-2">
+        <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 text-center text-xs font-bold flex items-center justify-center gap-2">
           <Icons.Ban />
-          <span className="font-bold">{errorMsg}</span>
+          <span>{errorMsg}</span>
         </div>
       )}
 
+      {/* LOADING SKELETON */}
       {status === 'loading' && (
-        <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4].map(i => (
-                <div key={i} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm animate-pulse flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-200 rounded-full shrink-0"></div>
-                    <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-gray-100 rounded w-1/2"></div>
-                    </div>
-                </div>
-            ))}
+        <div className="flex flex-col gap-3">
+             {[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse"></div>)}
         </div>
       )}
 
+      {/* RESULTS LIST */}
       {status === 'success' && nearbyPlaces.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 animate-in fade-in duration-500">
-          <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-4 md:mb-6 flex items-center gap-2">
-            <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
-            <span>تم العثور على {nearbyPlaces.length} موقع</span>
-          </h3>
-          <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {nearbyPlaces.map((place, idx) => (
-              <div 
-                key={place.ODB_ID} 
-                onClick={() => handleItemClick(place)}
-                className="flex items-center p-3 md:p-4 bg-gray-50 rounded-2xl hover:bg-white hover:shadow-md border border-transparent hover:border-purple-100 transition-all group cursor-pointer active:scale-[0.98]"
-              >
-                <div className="relative">
-                    <div className="bg-white w-12 h-12 rounded-2xl shadow-sm text-purple-600 font-bold flex items-center justify-center text-lg shrink-0 border border-gray-100 overflow-hidden">
-                        {place.image ? (
-                            <img src={place.image} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="opacity-50">{idx + 1}</span>
-                        )}
+        <div className="flex-1">
+            {/* Desktop Table */}
+            <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[300px]">
+                <table className="w-full text-right border-collapse">
+                <thead className="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
+                    <tr>
+                        <th className="py-3 px-4 font-semibold">المدينة</th>
+                        <th className="py-3 px-4 font-semibold">المسافة</th>
+                        <th className="py-3 px-4 font-semibold">ODB_ID</th>
+                        <th className="py-3 px-4 font-semibold text-center">أدوات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {nearbyPlaces.map((place) => (
+                        <tr key={place.ODB_ID} onClick={() => handleItemClick(place)} className="border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors">
+                            <td className="py-3 px-4 font-medium flex items-center gap-2">
+                                {place.image ? <img src={place.image} className="w-6 h-6 rounded object-cover" /> : <Icons.MapPin />}
+                                {place.CITYNAME}
+                            </td>
+                            <td className="py-3 px-4 text-sm font-bold text-green-600">{place.distance.toFixed(2)} كم</td>
+                            <td className="py-3 px-4 text-blue-600 font-mono text-sm">{place.ODB_ID}</td>
+                            <td className="py-3 px-4 text-center flex justify-center gap-2">
+                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="p-1.5 text-gray-400 hover:text-blue-600"><Icons.Navigation /></button>
+                                <button onClick={(e) => handleEditClick(e, place)} className="p-1.5 text-gray-400 hover:text-purple-600"><Icons.Edit /></button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+                </table>
+            </div>
+
+            {/* Mobile Cards (Compact) */}
+            <div className="md:hidden space-y-2 pb-4">
+                {nearbyPlaces.map((place) => (
+                    <div key={place.ODB_ID} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform" onClick={() => handleItemClick(place)}>
+                        <div className="flex items-center gap-3">
+                            <div className="shrink-0 w-10 h-10 bg-green-50 text-green-700 border border-green-100 rounded-lg flex flex-col items-center justify-center" onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)}>
+                                <span className="text-[10px] font-bold leading-none">{place.distance.toFixed(1)}</span>
+                                <span className="text-[7px] font-bold leading-none mt-0.5">KM</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold text-sm text-gray-900 truncate">{place.CITYNAME}</h3>
+                                    <span className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 rounded">{place.ODB_ID}</span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                                    <span>Lat: {place.LATITUDE.toFixed(3)}</span>
+                                    <span>•</span>
+                                    <span>{place.notes ? 'يوجد ملاحظات' : 'لا توجد ملاحظات'}</span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-1 border-r border-gray-100 pr-2 mr-1">
+                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="text-blue-500"><Icons.Navigation /></button>
+                                <button onClick={(e) => handleEditClick(e, place)} className="text-purple-500"><Icons.Edit /></button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div className="mr-3 md:mr-4 flex-1 min-w-0">
-                  <h4 className="font-bold text-gray-900 group-hover:text-purple-700 truncate leading-tight">{place.CITYNAME}</h4>
-                  <div className="flex items-center gap-2 mt-1.5">
-                     <span className="text-xs font-medium text-gray-600 bg-white border border-gray-200 px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                        {place.distance.toFixed(1)} كم
-                     </span>
-                     {place.notes && <span className="w-2 h-2 bg-yellow-400 rounded-full" title="يوجد ملاحظات"></span>}
-                  </div>
-                </div>
-                
-                <button
-                    type="button"
-                    onClick={(e) => handleEditClick(e, place)}
-                    className="w-8 h-8 flex items-center justify-center bg-white text-gray-400 rounded-lg hover:bg-purple-50 hover:text-purple-600 transition-colors shadow-sm border border-gray-100 ml-1"
-                >
-                    <div className="scale-75"><Icons.Edit /></div>
-                </button>
-              </div>
-            ))}
-          </div>
+                ))}
+            </div>
         </div>
       )}
       
-       {status === 'success' && nearbyPlaces.length === 0 && (
-         <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-300">
-             <div className="flex flex-col items-center gap-3 animate-in zoom-in duration-300">
-                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-2">
-                    <Icons.Search />
-                 </div>
-                 <p className="text-gray-900 font-bold text-lg">لا توجد أماكن قريبة</p>
-                 <p className="text-sm text-gray-500 max-w-xs mx-auto">
-                     حاول زيادة نطاق البحث من الإعدادات، أو تأكد من أنك في منطقة مغطاة.
-                 </p>
-             </div>
-         </div>
-       )}
-
-      {/* Redesigned Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
-          
-          <div className="relative bg-white rounded-t-3xl md:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-full duration-300">
-            
-            <div className="bg-white border-b border-gray-100 px-5 py-4 flex justify-between items-center sticky top-0 z-10 shrink-0">
-                <div className="flex flex-col">
-                    <h3 className="font-extrabold text-gray-900 text-lg leading-tight truncate max-w-[200px]">
-                        {isEditing ? 'تعديل البيانات' : formData.CITYNAME}
-                    </h3>
-                    <span className="text-[10px] text-gray-400 font-mono font-bold tracking-wide">{formData.ODB_ID}</span>
-                </div>
-                <button 
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                    <Icons.X />
-                </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto flex-1 overscroll-contain bg-gray-50/50">
-                <div className="flex flex-col h-full gap-5">
-                    {!isEditing ? (
-                        // VIEW MODE
-                        <>
-                         <div className="flex gap-4">
-                            <div 
-                                className="w-28 h-28 bg-white rounded-2xl shadow-sm border border-gray-200 p-1 shrink-0 cursor-pointer hover:border-primary transition-colors"
-                                onClick={() => formData.image && setZoomedImage(formData.image)}
-                            >
-                                <div className="w-full h-full rounded-xl overflow-hidden relative bg-gray-100 flex items-center justify-center">
-                                    {formData.image ? (
-                                        <img src={formData.image} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-gray-300"><Icons.MapPin /></span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex-1 flex flex-col gap-2 justify-center">
-                                <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm grid grid-cols-2 gap-2 text-center">
-                                    <div>
-                                        <span className="block text-[9px] text-gray-400 font-bold uppercase">Lat</span>
-                                        <span className="font-mono font-bold text-gray-700 text-xs" dir="ltr">{formData.LATITUDE?.toFixed(5)}</span>
-                                    </div>
-                                    <div className="border-r border-gray-100">
-                                        <span className="block text-[9px] text-gray-400 font-bold uppercase">Long</span>
-                                        <span className="font-mono font-bold text-gray-700 text-xs" dir="ltr">{formData.LONGITUDE?.toFixed(5)}</span>
-                                    </div>
-                                </div>
-                                
-                                {(formData.lastEditedBy) && (
-                                    <div className="flex items-center gap-2 text-[10px] text-gray-500 px-1">
-                                        <Icons.User />
-                                        <span>آخر تحديث: {formData.lastEditedBy}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex-1 min-h-0 flex flex-col">
-                            <label className="text-xs font-bold text-gray-500 mb-2 uppercase flex items-center gap-1">
-                                <Icons.Edit /> الملاحظات المسجلة
-                            </label>
-                            <div className="bg-white rounded-2xl p-4 text-sm text-gray-600 leading-relaxed border border-gray-200 shadow-sm flex-1 max-h-[200px] overflow-y-auto">
-                                {formData.notes ? formData.notes : <span className="text-gray-300 italic">لا توجد ملاحظات...</span>}
-                            </div>
-                        </div>
-                        </>
-                    ) : (
-                        // EDIT MODE
-                        <div className="space-y-5">
-                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Latitude</label>
-                                    <input
-                                        type="number" step="any" required
-                                        value={formData.LATITUDE}
-                                        onChange={(e) => setFormData({ ...formData, LATITUDE: parseFloat(e.target.value) })}
-                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-mono text-center focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Longitude</label>
-                                    <input
-                                        type="number" step="any" required
-                                        value={formData.LONGITUDE}
-                                        onChange={(e) => setFormData({ ...formData, LONGITUDE: parseFloat(e.target.value) })}
-                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-mono text-center focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
-                                    />
-                                </div>
-                             </div>
-
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase">الملاحظات</label>
-                                <textarea
-                                    value={formData.notes || ''}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="w-full p-4 bg-white border border-gray-200 rounded-xl text-sm h-32 focus:ring-2 focus:ring-primary outline-none resize-none shadow-sm transition-all"
-                                    placeholder="اكتب أي ملاحظات إضافية هنا..."
-                                ></textarea>
-                            </div>
-
-                            <div 
-                                onClick={triggerCamera}
-                                className="w-full h-20 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl flex flex-row items-center justify-center gap-3 text-blue-600 cursor-pointer active:bg-blue-100 hover:bg-blue-50/80 relative overflow-hidden transition-all group"
-                            >
-                                {formData.image ? (
-                                    <>
-                                        <img src={formData.image} className="absolute inset-0 w-full h-full object-cover opacity-30 grayscale group-hover:grayscale-0 transition-all" />
-                                        <div className="relative z-10 flex items-center gap-2 bg-white/90 px-4 py-1.5 rounded-full shadow-sm">
-                                            <Icons.Camera />
-                                            <span className="text-xs font-bold">تغيير الصورة</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="p-2 bg-white rounded-full shadow-sm"><Icons.Camera /></div>
-                                        <span className="text-xs font-bold">التقاط صورة</span>
-                                    </>
-                                )}
-                                <input 
-                                    ref={fileInputRef}
-                                    type="file" 
-                                    accept="image/*" 
-                                    capture="environment" 
-                                    className="hidden" 
-                                    onChange={handleImageCapture} 
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="p-4 border-t border-gray-100 bg-white shrink-0 pb-safe">
-                {!isEditing ? (
-                    <div className="flex gap-3">
-                        <button 
-                            type="button"
-                            onClick={handleGetDirections}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
-                        >
-                            <Icons.Navigation />
-                            <span>اتجاهات القيادة</span>
-                        </button>
-                        <button 
-                            type="button"
-                            onClick={() => setIsEditing(true)}
-                            className="w-14 bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl flex items-center justify-center active:scale-95 transition-all"
-                        >
-                            <Icons.Edit />
-                        </button>
-                    </div>
-                ) : (
-                    <div className="flex gap-3">
-                         <button
-                            type="button"
-                            onClick={() => setIsEditing(false)}
-                            className="flex-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 py-3.5 rounded-xl font-bold text-sm transition-colors"
-                        >
-                            إلغاء
-                        </button>
-                        <button
-                            type="button" 
-                            onClick={handleSave}
-                            className="flex-[2] bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
-                        >
-                            <span>حفظ التعديلات</span>
-                            <Icons.Check />
-                        </button>
-                    </div>
-                )}
-            </div>
-
-          </div>
-        </div>
+      {status === 'success' && nearbyPlaces.length === 0 && (
+         <div className="text-center py-8 text-gray-400 text-xs">لا توجد مواقع قريبة في النطاق المحدد</div>
       )}
 
-      {zoomedImage && (
-          <div className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
-              <button 
-                type="button"
-                onClick={() => setZoomedImage(null)}
-                className="absolute top-safe-top right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full text-white flex items-center justify-center backdrop-blur-md transition-colors"
-              >
-                  <Icons.X />
-              </button>
-              <img 
-                src={zoomedImage} 
-                alt="Full View" 
-                className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl" 
-              />
+      {/* Modal - kept simpler */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+          <div className="relative bg-white w-full md:w-96 rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-10">
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 className="font-bold">{isEditing ? 'تعديل' : formData.CITYNAME}</h3>
+                <button onClick={() => setIsModalOpen(false)}><Icons.X /></button>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-4">
+                {!isEditing ? (
+                    <>
+                        {formData.image && <img src={formData.image} className="w-full h-40 object-cover rounded-lg" />}
+                        <div className="grid grid-cols-2 gap-2 text-center text-xs bg-gray-50 p-2 rounded-lg">
+                            <div><span className="block text-gray-400">Lat</span>{formData.LATITUDE?.toFixed(5)}</div>
+                            <div><span className="block text-gray-400">Lng</span>{formData.LONGITUDE?.toFixed(5)}</div>
+                        </div>
+                        <div className="bg-yellow-50 p-3 rounded-lg text-sm text-gray-700 min-h-[60px]">{formData.notes || 'لا توجد ملاحظات'}</div>
+                        <button onClick={(e) => handleGetDirections(e)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Icons.Navigation /> اذهب للموقع</button>
+                        <button onClick={() => setIsEditing(true)} className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">تعديل البيانات</button>
+                    </>
+                ) : (
+                    <>
+                        <textarea value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full p-3 border rounded-lg h-32" placeholder="الملاحظات..."></textarea>
+                        <div onClick={triggerCamera} className="w-full p-4 border-2 border-dashed rounded-lg text-center cursor-pointer text-blue-500">
+                             <Icons.Camera /> {formData.image ? 'تغيير الصورة' : 'التقاط صورة'}
+                        </div>
+                        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleImageCapture} />
+                        <button onClick={handleSave} className="w-full bg-black text-white py-3 rounded-xl font-bold">حفظ</button>
+                    </>
+                )}
+            </div>
           </div>
+        </div>
       )}
     </div>
   );
