@@ -153,8 +153,8 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
         LONGITUDE: Number(formData.LONGITUDE),
         image: formData.image,
         notes: formData.notes,
-        // CHANGED: Use username instead of name to be consistent with MyActivity filtering
-        lastEditedBy: user.username,
+        // Use username preferred, fallback to name, or generic fallback
+        lastEditedBy: user.username || user.name || 'Admin',
         lastEditedAt: now.toISOString(),
     };
 
@@ -341,6 +341,17 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                         </div>
 
                         <div className="bg-yellow-50 p-3 rounded-lg text-sm text-gray-700 min-h-[60px]">{formData.notes || 'لا توجد ملاحظات'}</div>
+                        
+                        {/* NEW: Added Metadata section */}
+                        <div className="text-center border-t pt-3 mt-2">
+                            <p className="text-[10px] text-gray-400">
+                                آخر تعديل بواسطة <span className="font-bold text-gray-600">{formData.lastEditedBy || 'غير مسجل'}</span>
+                            </p>
+                            <p className="text-[9px] text-gray-300 mt-0.5 font-mono">
+                                {formData.lastEditedAt ? new Date(formData.lastEditedAt).toLocaleString('ar-EG') : '-'}
+                            </p>
+                        </div>
+
                         <button onClick={(e) => handleGetDirections(e)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Icons.Navigation /> اذهب للموقع</button>
                         <button onClick={() => setIsEditing(true)} className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">تعديل البيانات</button>
                     </>

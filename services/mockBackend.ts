@@ -168,7 +168,10 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
         ...loc,
         id: Number(loc.id),
         LATITUDE: Number(loc.LATITUDE),
-        LONGITUDE: Number(loc.LONGITUDE)
+        LONGITUDE: Number(loc.LONGITUDE),
+        // Map snake_case from DB to camelCase for Frontend
+        lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
+        lastEditedAt: loc.last_edited_at || loc.lastEditedAt
     }));
     return { data: mappedData, total: Number(result.total), totalPages: Number(result.totalPages) };
 };
@@ -184,7 +187,10 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
         ...loc,
         id: Number(loc.id),
         LATITUDE: Number(loc.LATITUDE),
-        LONGITUDE: Number(loc.LONGITUDE)
+        LONGITUDE: Number(loc.LONGITUDE),
+        // Map snake_case from DB to camelCase for Frontend
+        lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
+        lastEditedAt: loc.last_edited_at || loc.lastEditedAt
     }));
     
     return { data: mappedData, total: Number(result.total) };
@@ -198,12 +204,21 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
         id: Number(loc.id),
         LATITUDE: Number(loc.LATITUDE),
         LONGITUDE: Number(loc.LONGITUDE),
-        distance: Number(loc.distance)
+        distance: Number(loc.distance),
+        // Map snake_case from DB to camelCase for Frontend
+        lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
+        lastEditedAt: loc.last_edited_at || loc.lastEditedAt
     }));
 };
 
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
-    await apiRequest('save_location', 'POST', location);
+    // Ensure we send snake_case keys for the backend to understand
+    const payload = {
+        ...location,
+        last_edited_by: location.lastEditedBy,
+        last_edited_at: location.lastEditedAt
+    };
+    await apiRequest('save_location', 'POST', payload);
 };
 
 export const saveBulkODBLocations = async (locations: Omit<ODBLocation, 'id'>[]): Promise<{success: boolean, added: number, skipped: number}> => {

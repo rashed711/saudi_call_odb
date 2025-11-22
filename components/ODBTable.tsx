@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ODBLocation } from '../types';
-import { getODBLocationsPaginated, saveODBLocation, deleteODBLocation, saveBulkODBLocations, getSession } from '../services/mockBackend';
+import { ODBLocation, User } from '../types';
+import { getODBLocationsPaginated, saveODBLocation, deleteODBLocation, saveBulkODBLocations } from '../services/mockBackend';
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
 
-const ODBTable: React.FC = () => {
-  const [user] = useState(getSession());
+interface ODBTableProps {
+    user: User;
+}
+
+const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
   const [locations, setLocations] = useState<ODBLocation[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -18,7 +21,10 @@ const ODBTable: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false); // For Edit/Create
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false); // For Viewing Details
+  
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null); 
@@ -72,11 +78,15 @@ const ODBTable: React.FC = () => {
   };
 
   const handleRowClick = (loc: ODBLocation) => {
-    if (user && (user.role === 'admin' || user.permissions?.find(p => p.resource === 'odb' && p.actions.includes('edit')))) {
-        setFormData({ ...loc });
-        setSaveError(null);
-        setIsModalOpen(true);
-    }
+    // Open View Modal instead of Edit directly
+    setFormData({ ...loc });
+    setSaveError(null);
+    setIsViewModalOpen(true);
+  };
+
+  const handleSwitchToEdit = () => {
+      setIsViewModalOpen(false);
+      setIsModalOpen(true);
   };
 
   const handleDeleteRow = async (e: React.MouseEvent, id: number, cityName: string) => {
@@ -119,8 +129,8 @@ const ODBTable: React.FC = () => {
       LONGITUDE: Number(formData.LONGITUDE),
       image: formData.image,
       notes: formData.notes,
-      // CHANGED: Use username instead of name to be consistent with MyActivity filtering
-      lastEditedBy: user?.username || 'Unknown',
+      // Use username preferred, fallback to name, or generic fallback
+      lastEditedBy: user.username || user.name || 'Admin',
       lastEditedAt: now.toISOString()
     };
 
@@ -282,9 +292,86 @@ const ODBTable: React.FC = () => {
         </div>
       )}
 
-      {/* Modal */}
+      {/* VIEW DETAIL MODAL */}
+      {isViewModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsViewModalOpen(false)}></div>
+            <div className="relative bg-white w-full md:w-[500px] rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-10">
+                
+                {/* Modal Header */}
+                <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-10 bg-gradient-to-b from-black/60 to-transparent text-white">
+                    <h3 className="font-bold text-lg shadow-black drop-shadow-md">{formData.CITYNAME}</h3>
+                    <button onClick={() => setIsViewModalOpen(false)} className="bg-black/20 hover:bg-black/40 rounded-full p-1 backdrop-blur-md"><Icons.X /></button>
+                </div>
+
+                {/* Image or Placeholder */}
+                <div className="h-56 bg-gray-100 relative">
+                    {formData.image ? (
+                        <img src={formData.image} className="w-full h-full object-cover" alt={formData.CITYNAME} />
+                    ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                            <div className="scale-150"><Icons.MapPin /></div>
+                            <span className="mt-2 text-sm">لا توجد صورة</span>
+                        </div>
+                    )}
+                        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-mono font-bold text-blue-600 shadow-sm">
+                        {formData.ODB_ID}
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 overflow-y-auto space-y-6">
+                    {/* Coordinates */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
+                            <span className="block text-[10px] text-gray-400 font-bold uppercase mb-1">Latitude</span>
+                            <span className="font-mono font-bold text-gray-800">{Number(formData.LATITUDE).toFixed(6)}</span>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
+                            <span className="block text-[10px] text-gray-400 font-bold uppercase mb-1">Longitude</span>
+                            <span className="font-mono font-bold text-gray-800">{Number(formData.LONGITUDE).toFixed(6)}</span>
+                        </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                            <Icons.Edit /> ملاحظات
+                        </h4>
+                        <div className="bg-yellow-50 p-4 rounded-xl text-sm text-gray-700 border border-yellow-100 min-h-[80px]">
+                            {formData.notes ? formData.notes : <span className="text-gray-400 italic">لا توجد ملاحظات مسجلة</span>}
+                        </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="text-center border-t pt-4">
+                        <p className="text-xs text-gray-400">
+                            آخر تعديل بواسطة <span className="font-bold text-gray-600">{formData.lastEditedBy || 'غير مسجل'}</span>
+                        </p>
+                        <p className="text-[10px] text-gray-300 mt-1 font-mono">
+                            {formData.lastEditedAt ? new Date(formData.lastEditedAt).toLocaleString('ar-EG') : '-'}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Actions Footer */}
+                <div className="p-4 bg-gray-50 border-t flex gap-3">
+                    <button onClick={() => setIsViewModalOpen(false)} className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold shadow-sm hover:bg-gray-50">
+                        إغلاق
+                    </button>
+                    <PermissionGuard user={user} resource="odb" action="edit">
+                        <button onClick={handleSwitchToEdit} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700">
+                            تعديل البيانات
+                        </button>
+                    </PermissionGuard>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-end md:items-center justify-center">
+        <div className="fixed inset-0 z-[80] bg-black/50 flex items-end md:items-center justify-center">
           <div className="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl flex flex-col animate-in slide-in-from-bottom-10">
             <div className="p-4 border-b flex justify-between">
                 <button onClick={() => setIsModalOpen(false)}>إلغاء</button>

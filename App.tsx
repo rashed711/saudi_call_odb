@@ -53,7 +53,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case View.SETTINGS_ODB: 
-        return can('odb', 'view') ? <ODBTable /> : <AccessDenied />;
+        return can('odb', 'view') ? <ODBTable user={user} /> : <AccessDenied />;
       case View.NEARBY: 
         return can('nearby', 'view') ? <NearbyPlaces user={user} /> : <AccessDenied />;
       case View.PROFILE: 
