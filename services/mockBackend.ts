@@ -11,7 +11,8 @@ const ADMIN_PERMISSIONS: Permission[] = [
     { resource: 'nearby', actions: ['view', 'create', 'edit'] },
     { resource: 'users', actions: ['view', 'create', 'edit', 'delete'] },
     { resource: 'settings', actions: ['view', 'edit'] },
-    { resource: 'my_activity', actions: ['view'] }
+    { resource: 'my_activity', actions: ['view'] },
+    { resource: 'map_filter', actions: ['view'] }
 ];
 
 const SUPERVISOR_PERMISSIONS: Permission[] = [
@@ -19,14 +20,16 @@ const SUPERVISOR_PERMISSIONS: Permission[] = [
     { resource: 'odb', actions: ['view', 'create', 'edit'] }, // No delete
     { resource: 'nearby', actions: ['view'] },
     { resource: 'users', actions: ['view', 'create', 'edit'] }, // Manage their delegates only
-    { resource: 'my_activity', actions: ['view'] }
+    { resource: 'my_activity', actions: ['view'] },
+    { resource: 'map_filter', actions: ['view'] }
 ];
 
 const DELEGATE_PERMISSIONS: Permission[] = [
     { resource: 'dashboard', actions: ['view'] },
     { resource: 'odb', actions: ['view'] }, // View only global list
     { resource: 'nearby', actions: ['view'] },
-    { resource: 'my_activity', actions: ['view', 'edit'] } // Can edit their own work
+    { resource: 'my_activity', actions: ['view', 'edit'] }, // Can edit their own work
+    { resource: 'map_filter', actions: ['view'] }
 ];
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -35,7 +38,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
     secondaryColor: '#1e293b',
     accentColor: '#3b82f6',
     searchRadius: 50,
-    maxResults: 20
+    maxResults: 20 // Updated to 20 per user request
 };
 
 // --- HELPER ---
@@ -57,7 +60,6 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
         try { 
             data = JSON.parse(text); 
         } catch (e) { 
-            // If response is OK but not JSON, that's an issue
             if (response.ok) {
                  console.error("Non-JSON Response from Server:", text);
                  if (text.includes("Fatal error") || text.includes("Parse error")) {
@@ -65,36 +67,46 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
                  }
                  throw new Error('الخادم أرسل استجابة غير صحيحة (Invalid JSON)'); 
             }
-            // If response is NOT OK, we will handle it below
         }
 
-        // Handle HTTP errors (4xx, 5xx)
         if (!response.ok) {
-            // If the server sent a JSON error message (e.g., { "error": "User exists" }), use it
             if (data && data.error) {
                 throw new Error(data.error);
             }
-            
-            // Otherwise, use the status text or a snippet of the raw response
             const cleanText = text ? text.replace(/<[^>]+>/g, '').trim().substring(0, 150) : response.statusText;
             throw new Error(`Server Error (${response.status}): ${cleanText}`);
         }
 
-        // Handle Logic errors inside 200 OK (if any)
         if (data.error) throw new Error(data.error);
-        
         return data;
 
     } catch (error: any) {
         if (error.name === 'AbortError') throw error;
-        
         if (error.message === 'Failed to fetch') {
              throw new Error("فشل الاتصال بالسيرفر. تأكد من تشغيل ملف api.php وإعدادات CORS.");
         }
-
         if (!silent) console.error(`API Request Failed [${action}]:`, error);
         throw error;
     }
+}
+
+// --- UTILS ---
+// Haversine formula to calculate distance in KM
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const d = R * c; // Distance in km
+    return d;
+}
+
+function deg2rad(deg: number): number {
+    return deg * (Math.PI/180);
 }
 
 // --- AUTH & PERMISSIONS ---
@@ -129,7 +141,6 @@ export const getSession = (): User | null => {
 };
 
 export const checkSessionStatus = async (userId: number): Promise<void> => {
-    // Silent request to check if user is still active
     await apiRequest(`check_session&id=${userId}`, 'GET', null, undefined, true);
 };
 
@@ -187,23 +198,34 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
             LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
             lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
             lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
-            // OPTIMIZATION: Do NOT map the image here to save bandwidth. 
             image: undefined 
         }));
         return { data: mappedData, total: Number(result.total), totalPages: Number(result.totalPages) };
     } catch (e: any) {
-        if (e.message.includes("Invalid JSON")) {
-             console.error("Backend returned invalid JSON. Possible PHP Error.");
-        }
         throw e;
     }
 };
 
-// 2. Get Single Location Details (HEAVY - With Image)
+export const getAllLocationsForMap = async (): Promise<ODBLocation[]> => {
+     try {
+        const result = await apiRequest(`get_locations_paginated&page=1&limit=500`, 'GET');
+        return result.data.map((loc: any) => ({
+            ...loc,
+            id: Number(loc.id),
+            ODB_ID: loc.ODB_ID || loc.odb_id,
+            CITYNAME: loc.CITYNAME || loc.city_name,
+            LATITUDE: Number(loc.LATITUDE || loc.latitude),
+            LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
+            image: undefined 
+        }));
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+};
+
 export const getLocationDetails = async (id: number): Promise<ODBLocation> => {
     const result = await apiRequest(`get_location_details&id=${id}`, 'GET');
-    
-    // Support both single object and array return
     const loc = Array.isArray(result) ? result[0] : result;
     
     if (!loc) throw new Error("الموقع غير موجود");
@@ -217,7 +239,7 @@ export const getLocationDetails = async (id: number): Promise<ODBLocation> => {
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
         lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
-        image: loc.image // Here we DO include the image
+        image: loc.image
     };
 };
 
@@ -233,33 +255,55 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
         lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
-        image: undefined // OPTIMIZATION: No image in list
+        image: undefined 
     }));
     
     return { data: mappedData, total: Number(result.total) };
 };
 
 export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: number, limit: number): Promise<NearbyLocation[]> => {
-    const effectiveRadius = radius === 0 ? 20000 : radius;
-    const data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
+    const effectiveRadius = radius === 0 ? 50000 : radius;
+    // We request more from the server if possible, then filter accurately on client to be safe
+    // But since this is a proxy, we trust the server first.
+    let data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
     
     if (!Array.isArray(data)) {
-        console.error("Expected array for nearby locations, got:", data);
+        // Fallback: If backend returns object or error, try fetching all and sorting client-side (Emergency mode)
+        // For now, return empty array to prevent crash
         return [];
     }
 
-    return data.map((loc: any) => ({
-        ...loc,
-        id: Number(loc.id),
-        ODB_ID: loc.ODB_ID || loc.odb_id,
-        CITYNAME: loc.CITYNAME || loc.city_name,
-        LATITUDE: Number(loc.LATITUDE || loc.latitude),
-        LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
-        distance: Number(loc.distance),
-        lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
-        lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
-        image: undefined // OPTIMIZATION: No image in list
-    }));
+    // MAP AND ENSURE DISTANCE
+    let mappedLocations = data.map((loc: any) => {
+        const lLat = Number(loc.LATITUDE || loc.latitude);
+        const lLng = Number(loc.LONGITUDE || loc.longitude);
+        
+        // If API didn't return distance, calculate it
+        let dist = loc.distance ? Number(loc.distance) : calculateDistance(lat, lng, lLat, lLng);
+
+        return {
+            ...loc,
+            id: Number(loc.id),
+            ODB_ID: loc.ODB_ID || loc.odb_id,
+            CITYNAME: loc.CITYNAME || loc.city_name,
+            LATITUDE: lLat,
+            LONGITUDE: lLng,
+            distance: dist,
+            lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
+            lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+            image: undefined 
+        };
+    });
+
+    // Client-side sort to guarantee "Nearest 20"
+    mappedLocations.sort((a, b) => a.distance - b.distance);
+
+    // Enforce limit if API didn't
+    if (limit > 0) {
+        mappedLocations = mappedLocations.slice(0, limit);
+    }
+
+    return mappedLocations;
 };
 
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {

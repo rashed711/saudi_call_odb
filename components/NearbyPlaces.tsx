@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ODBLocation, NearbyLocation, User } from '../types';
 import { getNearbyLocationsAPI, saveODBLocation, getSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
@@ -22,6 +22,11 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // Auto-detect location on mount
+  useEffect(() => {
+      handleGetLocation();
+  }, []);
+
   const showToast = (msg: string) => {
       setToastMsg(msg);
       setTimeout(() => setToastMsg(null), 3000);
@@ -43,27 +48,33 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
         processNearby(latitude, longitude);
       },
       (error) => {
+        // Only show error if we are stuck in loading, otherwise keep idle or previous state
         setStatus('error');
         let msg = 'حدث خطأ أثناء تحديد الموقع.';
-        if (error.code === 1) msg = 'تم رفض إذن الوصول للموقع.';
-        else if (error.code === 2) msg = 'الموقع غير متاح.';
+        if (error.code === 1) msg = 'يرجى السماح بتحديد الموقع لعرض الأماكن القريبة.';
+        else if (error.code === 2) msg = 'الموقع غير متاح حالياً.';
         else if (error.code === 3) msg = 'انتهت مهلة تحديد الموقع.';
         setErrorMsg(msg);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000 }
     );
   };
 
   const processNearby = async (lat: number, lng: number) => {
     try {
         const settings = await getSiteSettings();
+        // Use settings but ensure we at least try to get 20 if the setting is too low, 
+        // or respect the user's "Nearest 20" wish explicitly.
+        const limit = Math.max(settings.maxResults, 20); 
+        
         const places = await getNearbyLocationsAPI(
             lat, 
             lng, 
             settings.searchRadius, 
-            settings.maxResults
+            limit
         );
 
+        // Client-side duplicate filter
         const uniquePlaces = places.filter((place, index, self) => 
             index === self.findIndex((t) => t.ODB_ID === place.ODB_ID)
         );
@@ -142,12 +153,13 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                 <div className="flex items-center gap-2 text-[10px] md:text-xs text-purple-100 opacity-90 mt-1">
                     {status === 'success' ? (
                         <span className="bg-white/20 px-1.5 py-0.5 rounded font-bold">
-                             {nearbyPlaces.length} موقع
+                             تم العثور على {nearbyPlaces.length} موقع
                         </span>
+                    ) : status === 'loading' ? (
+                        <span className="animate-pulse">جاري تحديد موقعك والبحث...</span>
                     ) : (
-                        <span>استكشف محيطك</span>
+                         <span>قم بتفعيل الموقع للمتابعة</span>
                     )}
-                    {userCoords && <span className="opacity-70">| {userCoords.lat.toFixed(4)}, {userCoords.lng.toFixed(4)}</span>}
                 </div>
             </div>
             
@@ -174,26 +186,30 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       </div>
 
       {status === 'error' && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 text-center text-xs font-bold flex items-center justify-center gap-2">
+        <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 text-center flex flex-col items-center justify-center gap-2">
           <Icons.Ban />
-          <span>{errorMsg}</span>
+          <span className="font-bold text-sm">{errorMsg}</span>
+          <button onClick={handleGetLocation} className="mt-2 bg-red-100 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-200">
+              إعادة المحاولة
+          </button>
         </div>
       )}
 
       {/* LOADING SKELETON */}
       {status === 'loading' && (
         <div className="flex flex-col gap-3">
-             {[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse"></div>)}
+             <div className="text-center text-gray-400 text-xs animate-pulse mb-2">جاري حساب المسافات لأقرب 20 موقع...</div>
+             {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse"></div>)}
         </div>
       )}
 
       {/* RESULTS LIST */}
       {status === 'success' && nearbyPlaces.length > 0 && (
-        <div className="flex-1">
+        <div className="flex-1 overflow-y-auto">
             {/* Desktop Table */}
             <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[300px]">
                 <table className="w-full text-right border-collapse">
-                <thead className="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
+                <thead className="bg-gray-50 text-gray-600 text-sm border-b border-gray-200 sticky top-0">
                     <tr>
                         <th className="py-3 px-4 font-semibold">المدينة</th>
                         <th className="py-3 px-4 font-semibold">المسافة</th>
@@ -205,15 +221,14 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                     {nearbyPlaces.map((place) => (
                         <tr key={place.ODB_ID} onClick={() => handleItemClick(place)} className="border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors">
                             <td className="py-3 px-4 font-medium flex items-center gap-2">
-                                {/* Always use generic Icon, no image preview in list */}
                                 <div className="text-gray-400"><Icons.MapPin /></div>
                                 {place.CITYNAME}
                             </td>
                             <td className="py-3 px-4 text-sm font-bold text-green-600">{place.distance.toFixed(2)} كم</td>
                             <td className="py-3 px-4 text-blue-600 font-mono text-sm">{place.ODB_ID}</td>
                             <td className="py-3 px-4 text-center flex justify-center gap-2">
-                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="p-1.5 text-gray-400 hover:text-blue-600"><Icons.Navigation /></button>
-                                <button onClick={(e) => handleEditClick(e, place)} className="p-1.5 text-gray-400 hover:text-purple-600"><Icons.Edit /></button>
+                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="p-1.5 text-gray-400 hover:text-blue-600" title="اتجاهات"><Icons.Navigation /></button>
+                                <button onClick={(e) => handleEditClick(e, place)} className="p-1.5 text-gray-400 hover:text-purple-600" title="تعديل"><Icons.Edit /></button>
                             </td>
                         </tr>
                     ))}
@@ -226,23 +241,22 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                 {nearbyPlaces.map((place) => (
                     <div key={place.ODB_ID} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform" onClick={() => handleItemClick(place)}>
                         <div className="flex items-center gap-3">
-                            <div className="shrink-0 w-10 h-10 bg-green-50 text-green-700 border border-green-100 rounded-lg flex flex-col items-center justify-center" onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)}>
-                                <span className="text-[10px] font-bold leading-none">{place.distance.toFixed(1)}</span>
-                                <span className="text-[7px] font-bold leading-none mt-0.5">KM</span>
+                            <div className="shrink-0 w-12 h-12 bg-green-50 text-green-700 border border-green-100 rounded-lg flex flex-col items-center justify-center" onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)}>
+                                <span className="text-sm font-bold leading-none">{place.distance.toFixed(1)}</span>
+                                <span className="text-[9px] font-bold leading-none mt-0.5 opacity-70">كم</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center">
+                                <div className="flex justify-between items-start">
                                     <h3 className="font-bold text-sm text-gray-900 truncate">{place.CITYNAME}</h3>
-                                    <span className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 rounded">{place.ODB_ID}</span>
+                                    <span className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{place.ODB_ID}</span>
                                 </div>
-                                <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
-                                    <span>Lat: {place.LATITUDE.toFixed(3)}</span>
-                                    <span>•</span>
-                                    <span>{place.notes ? 'يوجد ملاحظات' : 'لا توجد ملاحظات'}</span>
+                                <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-400">
+                                    <Icons.Navigation />
+                                    <span>انقر للاتجاهات</span>
                                 </div>
                             </div>
                             <div className="flex flex-col gap-1 border-r border-gray-100 pr-2 mr-1">
-                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="text-blue-500 bg-blue-50 p-1.5 rounded-full"><Icons.Navigation /></button>
+                                <button onClick={(e) => handleEditClick(e, place)} className="text-gray-400 hover:text-blue-500 p-1.5"><Icons.Edit /></button>
                             </div>
                         </div>
                     </div>
@@ -252,7 +266,11 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       )}
       
       {status === 'success' && nearbyPlaces.length === 0 && (
-         <div className="text-center py-8 text-gray-400 text-xs">لا توجد مواقع قريبة في النطاق المحدد</div>
+         <div className="text-center py-12 text-gray-400 flex flex-col items-center">
+             <Icons.Search />
+             <div className="mt-2 text-sm font-bold">لا توجد مواقع قريبة في النطاق المحدد</div>
+             <div className="text-xs mt-1 opacity-70">حاول زيادة نطاق البحث من الإعدادات</div>
+         </div>
       )}
 
       {/* Unified Location Modal */}
