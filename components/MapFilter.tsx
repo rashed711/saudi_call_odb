@@ -469,7 +469,7 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
             mode={modalMode}
             data={selectedLocation}
             user={user}
-            context="default"
+            context="map_filter"
             onSave={handleSave}
             onEdit={handleSwitchToEdit}
         />

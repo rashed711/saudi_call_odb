@@ -11,7 +11,7 @@ interface LocationModalProps {
   mode: 'view' | 'edit' | 'create';
   data: Partial<ODBLocation>;
   user: User;
-  context: 'default' | 'nearby' | 'my_activity';
+  context: 'default' | 'nearby' | 'my_activity' | 'map_filter';
   onSave: (data: ODBLocation) => Promise<void>;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -209,7 +209,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
         {/* Action Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-3">
-            {context === 'nearby' && (
+            {(context === 'nearby' || context === 'map_filter') && (
                 <button onClick={handleGetDirections} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 transition-all active:scale-95">
                     <Icons.Navigation /> <span>اذهب للموقع</span>
                 </button>
