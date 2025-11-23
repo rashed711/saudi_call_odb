@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getAllLocationsForMap, saveODBLocation } from '../services/mockBackend';
-import { ODBLocation, User } from '../types';
+import { getAllLocationsForMap, saveODBLocation, getSiteSettings } from '../services/mockBackend';
+import { ODBLocation, User, SiteSettings } from '../types';
 import { Icons } from './Icons';
 import { LocationModal } from './LocationModal';
 
@@ -9,14 +9,26 @@ interface MapFilterProps {
   user: User;
 }
 
+// Extend ODBLocation locally to include distance for sorting
+interface LocationWithDistance extends ODBLocation {
+    distance?: number;
+}
+
 const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
   const mapRef = useRef<any>(null);
   const rectangleRef = useRef<any>(null);
-  const [locations, setLocations] = useState<ODBLocation[]>([]);
-  const [filteredLocations, setFilteredLocations] = useState<ODBLocation[]>([]);
+  const userMarkerRef = useRef<any>(null);
+  const markersLayerRef = useRef<any>(null); // Layer group for markers
+
+  const [allLocations, setAllLocations] = useState<LocationWithDistance[]>([]);
+  const [filteredLocations, setFilteredLocations] = useState<LocationWithDistance[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [bounds, setBounds] = useState<any>(null);
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [viewMode, setViewMode] = useState<'nearest' | 'area'>('nearest');
+  
+  // Settings State
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,9 +36,8 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
   const [selectedLocation, setSelectedLocation] = useState<Partial<ODBLocation>>({});
 
   useEffect(() => {
-    loadData();
-    // Initialize Map
     initMap();
+    initializeData();
 
     return () => {
         if (mapRef.current) {
@@ -36,40 +47,30 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
     };
   }, []);
 
-  const loadData = async () => {
-      try {
-          const allLocs = await getAllLocationsForMap();
-          setLocations(allLocs);
-          setFilteredLocations(allLocs);
-          
-          if (mapRef.current) {
-             addMarkers(allLocs);
-          }
-      } catch (e) {
-          console.error(e);
-      } finally {
-          setLoading(false);
-      }
-  };
-
+  // Initialize Map
   const initMap = () => {
       // @ts-ignore
       if (!window.L) return;
       // @ts-ignore
       const L = window.L;
 
-      // Check if map is already initialized
       if (mapRef.current) return;
 
-      const map = L.map('map-container').setView([26.8206, 30.8025], 6); // Center of Egypt
+      const map = L.map('map-container', { zoomControl: false }).setView([26.8206, 30.8025], 6); // Default Center Egypt
       
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors'
+          attribution: '&copy; OpenStreetMap',
+          maxZoom: 19
       }).addTo(map);
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      // Create a FeatureGroup for markers to easily clear them
+      markersLayerRef.current = L.featureGroup().addTo(map);
 
       mapRef.current = map;
 
-      // Add simple drawing logic
+      // Drawing Logic
       let startLatLng: any = null;
       let currentRect: any = null;
 
@@ -82,7 +83,7 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
               map.removeLayer(rectangleRef.current);
           }
           
-          currentRect = L.rectangle([startLatLng, startLatLng], {color: "#1e40af", weight: 2}).addTo(map);
+          currentRect = L.rectangle([startLatLng, startLatLng], {color: "#ef4444", weight: 2, dashArray: '5, 5'}).addTo(map);
           rectangleRef.current = currentRect;
       });
 
@@ -95,29 +96,170 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
           if (!startLatLng) return;
           map.dragging.enable();
           
-          // Finalize box
           const b = currentRect.getBounds();
-          setBounds(b);
-          filterLocations(b);
+          filterByBounds(b);
 
           startLatLng = null;
-          currentRect = null; // Don't nullify ref, keep it on map
+          currentRect = null;
           setIsDrawing(false);
           map.isDrawingEnabled = false;
           map.getContainer().style.cursor = '';
+          setViewMode('area'); // Switch mode to Area
       });
   };
 
-  const addMarkers = (locs: ODBLocation[]) => {
-      // @ts-ignore
-      if (!window.L || !mapRef.current) return;
+  const initializeData = async () => {
+      setLoading(true);
+      try {
+          // 1. Fetch All Data and Settings in parallel
+          const [data, currentSettings] = await Promise.all([
+              getAllLocationsForMap(),
+              getSiteSettings()
+          ]);
+          
+          setAllLocations(data);
+          setSettings(currentSettings);
+
+          // 2. Try to get User Location
+          if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                  (position) => {
+                      const { latitude, longitude } = position.coords;
+                      handleLocationFound(latitude, longitude, data, currentSettings);
+                  },
+                  (error) => {
+                      console.warn("Location access denied or error:", error);
+                      // Fallback: Show limit based on settings or default 20
+                      const limit = currentSettings.maxResults || 20;
+                      setFilteredLocations(data.slice(0, limit));
+                      renderMarkers(data.slice(0, limit));
+                  },
+                  { enableHighAccuracy: true, timeout: 10000 }
+              );
+          } else {
+              const limit = currentSettings.maxResults || 20;
+              setFilteredLocations(data.slice(0, limit));
+              renderMarkers(data.slice(0, limit));
+          }
+
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleLocationFound = (lat: number, lng: number, data: LocationWithDistance[], currentSettings: SiteSettings) => {
+      setUserPos([lat, lng]);
+
+      // Calculate Distances
+      const dataWithDist = data.map(loc => ({
+          ...loc,
+          distance: calcDistance(lat, lng, loc.LATITUDE, loc.LONGITUDE)
+      }));
+      setAllLocations(dataWithDist); // Update main list with distances
+
+      // Apply Filter by Radius (if set)
+      let accessiblePoints = dataWithDist;
+      if (currentSettings.searchRadius > 0) {
+          accessiblePoints = accessiblePoints.filter(d => d.distance! <= currentSettings.searchRadius);
+      }
+
+      // Sort by Distance
+      accessiblePoints.sort((a, b) => (a.distance || 99999) - (b.distance || 99999));
+      
+      // Apply Max Results Limit
+      const limit = currentSettings.maxResults || 20;
+      const topResults = accessiblePoints.slice(0, limit);
+
+      setFilteredLocations(topResults);
+      setViewMode('nearest');
+
+      // Update Map
       // @ts-ignore
       const L = window.L;
+      if (mapRef.current && L) {
+          // Add User Marker (Blue Pulse)
+          if (userMarkerRef.current) mapRef.current.removeLayer(userMarkerRef.current);
+          
+          const userIcon = L.divIcon({
+              className: 'custom-div-icon',
+              html: `<div style="background-color: #2563eb; width: 15px; height: 15px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(37,99,235,0.5);"></div>`,
+              iconSize: [15, 15],
+              iconAnchor: [7, 7]
+          });
 
-      // Note: Adding thousands of markers can be slow. 
-      // In a real app, use clustering or only show markers after filter.
-      // For this demo, we'll assume a reasonable number or just show them.
-      // To improve performance, we might clear previous markers, but here we just add them once.
+          userMarkerRef.current = L.marker([lat, lng], { icon: userIcon }).addTo(mapRef.current);
+          
+          // Fly to user
+          mapRef.current.setView([lat, lng], 13);
+          
+          // Render result markers
+          renderMarkers(topResults);
+      }
+  };
+
+  const renderMarkers = (locs: LocationWithDistance[]) => {
+      // @ts-ignore
+      const L = window.L;
+      if (!mapRef.current || !markersLayerRef.current) return;
+
+      markersLayerRef.current.clearLayers();
+
+      locs.forEach(loc => {
+          const marker = L.marker([loc.LATITUDE, loc.LONGITUDE])
+            .bindPopup(`<b>${loc.CITYNAME}</b><br/>${loc.ODB_ID}`)
+            .on('click', () => handleItemClick(loc));
+          
+          markersLayerRef.current.addLayer(marker);
+      });
+  };
+
+  const filterByBounds = (bounds: any) => {
+      const north = bounds.getNorth();
+      const south = bounds.getSouth();
+      const east = bounds.getEast();
+      const west = bounds.getWest();
+
+      // Ensure we use the latest allLocations (which might have distances)
+      const filtered = allLocations.filter(loc => 
+          loc.LATITUDE <= north &&
+          loc.LATITUDE >= south &&
+          loc.LONGITUDE <= east &&
+          loc.LONGITUDE >= west
+      );
+
+      setFilteredLocations(filtered);
+      renderMarkers(filtered);
+      
+      // Zoom to bounds
+      mapRef.current.fitBounds(bounds);
+  };
+
+  const resetToNearest = () => {
+      if (rectangleRef.current && mapRef.current) {
+          mapRef.current.removeLayer(rectangleRef.current);
+          rectangleRef.current = null;
+      }
+
+      if (userPos && settings) {
+          handleLocationFound(userPos[0], userPos[1], allLocations, settings);
+      } else {
+          // Re-trigger location check
+          initializeData();
+      }
+  };
+
+  // Haversine Formula
+  const calcDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
   };
 
   const toggleDrawing = () => {
@@ -126,32 +268,6 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
       setIsDrawing(newState);
       mapRef.current.isDrawingEnabled = newState;
       mapRef.current.getContainer().style.cursor = newState ? 'crosshair' : '';
-      
-      if (newState) {
-          // Clear previous rect if restarting
-          if (rectangleRef.current) {
-               mapRef.current.removeLayer(rectangleRef.current);
-               rectangleRef.current = null;
-               setBounds(null);
-               setFilteredLocations(locations); // Reset filter
-          }
-      }
-  };
-
-  const filterLocations = (b: any) => {
-      const north = b.getNorth();
-      const south = b.getSouth();
-      const east = b.getEast();
-      const west = b.getWest();
-
-      const filtered = locations.filter(loc => 
-          loc.LATITUDE <= north &&
-          loc.LATITUDE >= south &&
-          loc.LONGITUDE <= east &&
-          loc.LONGITUDE >= west
-      );
-
-      setFilteredLocations(filtered);
   };
 
   // --- Modal Handlers ---
@@ -170,95 +286,124 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
 
   const handleSave = async (data: ODBLocation) => {
       await saveODBLocation(data);
-      // Refresh local data logic if needed
       setFilteredLocations(prev => prev.map(p => p.id === data.id ? {...p, ...data} : p));
+      setAllLocations(prev => prev.map(p => p.id === data.id ? {...p, ...data} : p));
   };
 
   const handleSwitchToEdit = () => setModalMode('edit');
 
+  const maxResults = settings?.maxResults || 20;
+
+  // --- Render ---
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] md:h-full space-y-3">
-        {/* Top Control Bar */}
-        <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
-            <div className="w-full md:w-auto flex justify-between items-center">
-                <div>
-                    <h2 className="text-lg md:text-xl font-bold flex items-center gap-2">
-                        <Icons.Map />
-                        <span>فلترة الخريطة</span>
-                    </h2>
-                    <p className="hidden md:block text-xs text-gray-500 mt-1">ارسم مربعاً لتحديد المواقع</p>
-                </div>
-                {/* Mobile Result Count */}
-                <div className="md:hidden text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
-                    {filteredLocations.length} موقع
-                </div>
+    <div className="flex flex-col h-[calc(100vh-140px)] md:h-full space-y-3 relative">
+        
+        {/* Floating Controls for Map (Better Mobile UX) */}
+        <div className="absolute top-4 left-4 right-4 z-[400] flex justify-between items-start pointer-events-none">
+            {/* Status Badge */}
+            <div className="bg-white/90 backdrop-blur shadow-md px-3 py-1.5 rounded-lg border border-gray-200 pointer-events-auto">
+                {viewMode === 'nearest' ? (
+                     <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
+                         <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
+                         </span>
+                         أقرب {maxResults} موقع لك
+                     </div>
+                ) : (
+                     <div className="flex items-center gap-2 text-xs font-bold text-orange-700">
+                         <Icons.Square />
+                         نتائج المنطقة المحددة ({filteredLocations.length})
+                     </div>
+                )}
             </div>
 
-            <div className="flex w-full md:w-auto items-center gap-3">
-                <div className="hidden md:block text-sm font-bold bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-                    النتائج: <span className="text-primary">{filteredLocations.length}</span>
-                </div>
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2 pointer-events-auto">
                 <button 
                     onClick={toggleDrawing}
-                    className={`flex-1 md:flex-none justify-center px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all text-sm md:text-base ${isDrawing ? 'bg-red-500 text-white shadow-lg' : 'bg-primary text-white hover:bg-blue-700'}`}
+                    className={`h-10 px-4 rounded-xl font-bold shadow-lg flex items-center gap-2 text-xs md:text-sm transition-all ${isDrawing ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
-                    {isDrawing ? <><Icons.X /> <span>إلغاء</span></> : <><Icons.Square /> <span>تحديد منطقة</span></>}
+                    {isDrawing ? <><Icons.X /> إلغاء الرسم</> : <><Icons.Square /> تحديد منطقة</>}
                 </button>
+                
+                {viewMode === 'area' && (
+                    <button 
+                        onClick={resetToNearest}
+                        className="h-10 px-4 rounded-xl font-bold shadow-lg flex items-center gap-2 text-xs md:text-sm bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                        <Icons.Navigation /> أقرب {maxResults}
+                    </button>
+                )}
             </div>
         </div>
 
-        {/* Map Container - Responsive Height */}
-        <div className="h-60 md:h-[400px] bg-gray-200 rounded-xl overflow-hidden border border-gray-300 relative shadow-inner shrink-0 group">
-             <div id="map-container" className="h-full w-full z-0"></div>
+        {/* Map Container */}
+        <div className="h-[45vh] md:h-[50%] bg-gray-200 rounded-2xl overflow-hidden border border-gray-300 shadow-inner shrink-0 relative z-0">
+             <div id="map-container" className="h-full w-full"></div>
              {isDrawing && (
-                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-xs font-bold pointer-events-none z-[1000] backdrop-blur-md whitespace-nowrap">
-                     اضغط واسحب على الخريطة
+                 <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-xs font-bold pointer-events-none z-[1000] backdrop-blur-md">
+                     ارسم مربعاً على الخريطة الآن
                  </div>
              )}
-             {/* Hint for interaction */}
-             {!isDrawing && (
-                <div className="absolute bottom-2 right-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-[10px] text-gray-500 pointer-events-none md:hidden z-[400]">
-                    استخدم إصبعين للتحريك
-                </div>
-             )}
         </div>
 
-        {/* Results List - Responsive (Table on Desktop, Cards on Mobile) */}
-        <div className="flex-1 bg-gray-50 md:bg-white rounded-xl md:shadow-sm md:border border-gray-100 overflow-hidden flex flex-col min-h-0">
-            <div className="hidden md:block p-3 bg-gray-50 border-b border-gray-100 font-bold text-sm text-gray-600">
-                قائمة المواقع في النطاق المحدد
+        {/* List Section */}
+        <div className="flex-1 bg-white md:bg-gray-50 rounded-t-2xl md:rounded-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:shadow-sm border-t md:border border-gray-200 overflow-hidden flex flex-col min-h-0">
+            {/* List Header */}
+            <div className="p-3 bg-white border-b border-gray-100 flex justify-between items-center shrink-0">
+                <h3 className="font-bold text-sm text-gray-700 flex items-center gap-2">
+                    <Icons.Database />
+                    النتائج ({filteredLocations.length})
+                </h3>
+                {settings && settings.searchRadius > 0 && viewMode === 'nearest' && (
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
+                        في نطاق {settings.searchRadius} كم
+                    </span>
+                )}
             </div>
-            
-            <div className="flex-1 overflow-y-auto p-1 md:p-0">
+
+            {/* Scrollable List */}
+            <div className="flex-1 overflow-y-auto p-2 md:p-0 bg-gray-50/50">
                 {loading ? (
-                    <div className="text-center py-12 text-gray-400">جاري التحميل...</div>
+                    <div className="flex flex-col items-center justify-center py-10 space-y-3">
+                         <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                         <span className="text-xs text-gray-400">جاري تحديد الموقع وجلب البيانات...</span>
+                    </div>
                 ) : filteredLocations.length === 0 ? (
-                    <div className="text-center py-12 text-gray-400 flex flex-col items-center">
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                         <Icons.MapPin />
-                        <span className="mt-2 text-sm">لا توجد مواقع في هذا النطاق</span>
+                        <span className="mt-2 text-sm font-bold">لا توجد مواقع</span>
+                        {viewMode === 'nearest' && settings && settings.searchRadius > 0 && (
+                            <span className="text-xs mt-1">حاول زيادة نطاق البحث من الإعدادات</span>
+                        )}
                     </div>
                 ) : (
                     <>
-                        {/* Desktop View: Table */}
-                        <table className="hidden md:table w-full text-right">
-                            <thead className="bg-white text-xs text-gray-400 uppercase sticky top-0 shadow-sm z-10">
+                        {/* Desktop Table */}
+                        <table className="hidden md:table w-full text-right bg-white">
+                            <thead className="bg-gray-50 text-xs text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                                 <tr>
-                                    <th className="px-4 py-3 bg-gray-50">المدينة</th>
-                                    <th className="px-4 py-3 bg-gray-50">ODB ID</th>
-                                    <th className="px-4 py-3 bg-gray-50">إحداثيات</th>
-                                    <th className="px-4 py-3 bg-gray-50 text-center">أدوات</th>
+                                    <th className="px-4 py-3">المدينة</th>
+                                    <th className="px-4 py-3">المسافة</th>
+                                    <th className="px-4 py-3">ODB ID</th>
+                                    <th className="px-4 py-3">أدوات</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {filteredLocations.map(loc => (
-                                    <tr key={loc.id} onClick={() => handleItemClick(loc)} className="hover:bg-blue-50 cursor-pointer transition-colors">
+                                    <tr key={loc.id} onClick={() => handleItemClick(loc)} className="hover:bg-blue-50 cursor-pointer transition-colors group">
                                         <td className="px-4 py-3 font-bold text-gray-800">{loc.CITYNAME}</td>
-                                        <td className="px-4 py-3 font-mono text-blue-600 text-xs">{loc.ODB_ID}</td>
-                                        <td className="px-4 py-3 font-mono text-gray-500 text-[10px] dir-ltr">
-                                            {loc.LATITUDE.toFixed(4)}, {loc.LONGITUDE.toFixed(4)}
+                                        <td className="px-4 py-3">
+                                            {loc.distance ? (
+                                                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">
+                                                    {loc.distance.toFixed(2)} كم
+                                                </span>
+                                            ) : '-'}
                                         </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <button onClick={(e) => handleEditClick(e, loc)} className="p-2 text-gray-400 hover:text-blue-600 bg-gray-100 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-all">
+                                        <td className="px-4 py-3 font-mono text-blue-600 text-xs">{loc.ODB_ID}</td>
+                                        <td className="px-4 py-3">
+                                            <button onClick={(e) => handleEditClick(e, loc)} className="p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <Icons.Edit />
                                             </button>
                                         </td>
@@ -267,23 +412,28 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                             </tbody>
                         </table>
 
-                        {/* Mobile View: Cards */}
-                        <div className="md:hidden space-y-2 pb-2">
+                        {/* Mobile Cards */}
+                        <div className="md:hidden space-y-2 pb-safe">
                             {filteredLocations.map((loc) => (
-                                <div key={loc.id} onClick={() => handleItemClick(loc)} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between active:scale-[0.99] transition-transform">
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                            <Icons.MapPin />
+                                <div key={loc.id} onClick={() => handleItemClick(loc)} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                                    <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border ${loc.distance ? 'bg-green-50 border-green-100 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                                        {loc.distance ? (
+                                            <>
+                                                <span className="text-sm font-bold leading-none">{loc.distance.toFixed(1)}</span>
+                                                <span className="text-[9px] opacity-75">km</span>
+                                            </>
+                                        ) : <Icons.MapPin />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="font-bold text-gray-900 truncate text-sm">{loc.CITYNAME}</h4>
+                                            <span className="text-[10px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{loc.ODB_ID}</span>
                                         </div>
-                                        <div className="min-w-0">
-                                            <h3 className="font-bold text-gray-900 truncate">{loc.CITYNAME}</h3>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-mono bg-gray-100 px-1.5 rounded text-gray-600">{loc.ODB_ID}</span>
-                                                <span className="text-[10px] text-gray-400 dir-ltr">{loc.LATITUDE.toFixed(3)}, {loc.LONGITUDE.toFixed(3)}</span>
-                                            </div>
+                                        <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">
+                                            <span className="dir-ltr">{loc.LATITUDE.toFixed(4)}, {loc.LONGITUDE.toFixed(4)}</span>
                                         </div>
                                     </div>
-                                    <button onClick={(e) => handleEditClick(e, loc)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 bg-gray-50 rounded-full">
+                                    <button onClick={(e) => handleEditClick(e, loc)} className="p-2 text-gray-400 hover:text-blue-600">
                                         <Icons.Edit />
                                     </button>
                                 </div>
