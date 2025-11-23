@@ -4,6 +4,7 @@ import { ODBLocation, User } from '../types';
 import { getODBLocationsPaginated, saveODBLocation, deleteODBLocation, saveBulkODBLocations } from '../services/mockBackend';
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
+import { LocationModal } from './LocationModal';
 
 interface ODBTableProps {
     user: User;
@@ -21,22 +22,16 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  // Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false); // For Edit/Create
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false); // For Viewing Details
-  
+  // New Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'view' | 'edit' | 'create'>('view');
+  const [selectedLocation, setSelectedLocation] = useState<Partial<ODBLocation>>({});
+
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null); 
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [formData, setFormData] = useState<Partial<ODBLocation>>({
-    id: 0, ODB_ID: '', CITYNAME: '', LATITUDE: 0, LONGITUDE: 0, image: '', notes: '', lastEditedBy: '', lastEditedAt: '',
-  });
-
   useEffect(() => {
       const timer = setTimeout(() => {
           setDebouncedSearch(searchQuery);
@@ -49,6 +44,7 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
       setLoading(true);
       try {
           const result = await getODBLocationsPaginated(page, limit, debouncedSearch, signal);
+          // Filter duplicates locally if any slip through
           const uniqueLocations = result.data.filter((loc, index, self) => 
              index === self.findIndex((t) => (t.ODB_ID === loc.ODB_ID))
           );
@@ -77,17 +73,44 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  // --- Modal Handlers ---
+
   const handleRowClick = (loc: ODBLocation) => {
-    // Open View Modal instead of Edit directly
-    setFormData({ ...loc });
-    setSaveError(null);
-    setIsViewModalOpen(true);
+    setSelectedLocation(loc);
+    setModalMode('view');
+    setIsModalOpen(true);
+  };
+
+  const handleCreateNew = () => {
+    setSelectedLocation({
+        id: 0,
+        CITYNAME: '',
+        ODB_ID: '',
+        LATITUDE: 0,
+        LONGITUDE: 0,
+        image: '',
+        notes: ''
+    });
+    setModalMode('create');
+    setIsModalOpen(true);
+  };
+
+  const handleSaveLocation = async (data: ODBLocation) => {
+    try {
+        await saveODBLocation(data);
+        await fetchLocations();
+        // If it was a create action, we might want to close, if edit, keep view open?
+        // Prompt says "Save or Cancel". Usually save closes modal.
+    } catch (error: any) {
+        alert("Error saving: " + error.message);
+    }
   };
 
   const handleSwitchToEdit = () => {
-      setIsViewModalOpen(false);
-      setIsModalOpen(true);
+      setModalMode('edit');
   };
+
+  // --- End Modal Handlers ---
 
   const handleDeleteRow = async (e: React.MouseEvent, id: number, cityName: string) => {
       e.stopPropagation(); 
@@ -104,54 +127,6 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
       for (const id of selectedIds) await deleteODBLocation(id);
       fetchLocations();
       setSelectedIds([]);
-    }
-  };
-
-  const handleOpenAddModal = () => {
-    setFormData({ id: 0, ODB_ID: '', CITYNAME: '', LATITUDE: 0, LONGITUDE: 0, image: '', notes: '', lastEditedBy: '', lastEditedAt: '' });
-    setSaveError(null);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.CITYNAME || !formData.ODB_ID) return;
-
-    setIsSaving(true);
-    setSaveError(null);
-
-    const now = new Date();
-    const newLoc: ODBLocation = {
-      id: formData.id || 0, 
-      ODB_ID: formData.ODB_ID,
-      CITYNAME: formData.CITYNAME,
-      LATITUDE: Number(formData.LATITUDE),
-      LONGITUDE: Number(formData.LONGITUDE),
-      image: formData.image,
-      notes: formData.notes,
-      // Use username preferred, fallback to name, or generic fallback
-      lastEditedBy: user.username || user.name || 'Admin',
-      lastEditedAt: now.toISOString()
-    };
-
-    try {
-        await saveODBLocation(newLoc);
-        await fetchLocations();
-        setIsModalOpen(false);
-        setSelectedIds([]); 
-    } catch (err: any) {
-        setSaveError(err.message);
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
-  const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => setFormData({ ...formData, image: reader.result as string });
-        reader.readAsDataURL(file);
     }
   };
 
@@ -205,7 +180,7 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
             </div>
             
             <PermissionGuard user={user} resource="odb" action="create">
-                <button onClick={handleOpenAddModal} className="w-12 h-12 flex items-center justify-center bg-primary text-white rounded-xl shadow-lg hover:bg-blue-700 transition-colors">
+                <button onClick={handleCreateNew} className="w-12 h-12 flex items-center justify-center bg-primary text-white rounded-xl shadow-lg hover:bg-blue-700 transition-colors">
                     <Icons.Plus />
                 </button>
             </PermissionGuard>
@@ -292,116 +267,17 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
         </div>
       )}
 
-      {/* VIEW DETAIL MODAL */}
-      {isViewModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsViewModalOpen(false)}></div>
-            <div className="relative bg-white w-full md:w-[500px] rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-10">
-                
-                {/* Modal Header */}
-                <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-10 bg-gradient-to-b from-black/60 to-transparent text-white">
-                    <h3 className="font-bold text-lg shadow-black drop-shadow-md">{formData.CITYNAME}</h3>
-                    <button onClick={() => setIsViewModalOpen(false)} className="bg-black/20 hover:bg-black/40 rounded-full p-1 backdrop-blur-md"><Icons.X /></button>
-                </div>
-
-                {/* Image or Placeholder */}
-                <div className="h-56 bg-gray-100 relative">
-                    {formData.image ? (
-                        <img src={formData.image} className="w-full h-full object-cover" alt={formData.CITYNAME} />
-                    ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                            <div className="scale-150"><Icons.MapPin /></div>
-                            <span className="mt-2 text-sm">لا توجد صورة</span>
-                        </div>
-                    )}
-                        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-mono font-bold text-blue-600 shadow-sm">
-                        {formData.ODB_ID}
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 overflow-y-auto space-y-6">
-                    {/* Coordinates */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase mb-1">Latitude</span>
-                            <span className="font-mono font-bold text-gray-800">{Number(formData.LATITUDE).toFixed(6)}</span>
-                        </div>
-                        <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase mb-1">Longitude</span>
-                            <span className="font-mono font-bold text-gray-800">{Number(formData.LONGITUDE).toFixed(6)}</span>
-                        </div>
-                    </div>
-
-                    {/* Notes */}
-                    <div>
-                        <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                            <Icons.Edit /> ملاحظات
-                        </h4>
-                        <div className="bg-yellow-50 p-4 rounded-xl text-sm text-gray-700 border border-yellow-100 min-h-[80px]">
-                            {formData.notes ? formData.notes : <span className="text-gray-400 italic">لا توجد ملاحظات مسجلة</span>}
-                        </div>
-                    </div>
-
-                    {/* Metadata */}
-                    <div className="text-center border-t pt-4">
-                        <p className="text-xs text-gray-400">
-                            آخر تعديل بواسطة <span className="font-bold text-gray-600">{formData.lastEditedBy || 'غير مسجل'}</span>
-                        </p>
-                        <p className="text-[10px] text-gray-300 mt-1 font-mono">
-                            {formData.lastEditedAt ? new Date(formData.lastEditedAt).toLocaleString('ar-EG') : '-'}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Actions Footer */}
-                <div className="p-4 bg-gray-50 border-t flex gap-3">
-                    <button onClick={() => setIsViewModalOpen(false)} className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold shadow-sm hover:bg-gray-50">
-                        إغلاق
-                    </button>
-                    <PermissionGuard user={user} resource="odb" action="edit">
-                        <button onClick={handleSwitchToEdit} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700">
-                            تعديل البيانات
-                        </button>
-                    </PermissionGuard>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* CREATE / EDIT MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[80] bg-black/50 flex items-end md:items-center justify-center">
-          <div className="bg-white w-full h-full md:h-auto md:max-w-lg md:rounded-2xl flex flex-col animate-in slide-in-from-bottom-10">
-            <div className="p-4 border-b flex justify-between">
-                <button onClick={() => setIsModalOpen(false)}>إلغاء</button>
-                <h3 className="font-bold">{formData.id ? 'تعديل' : 'جديد'}</h3>
-            </div>
-            <div className="p-6 flex-1 overflow-y-auto space-y-4">
-                <PermissionGuard user={user} resource="odb" action={formData.id ? 'edit' : 'create'} fallback={<div className="text-red-500 text-center">ليس لديك صلاحية التعديل</div>}>
-                    <form id="locForm" onSubmit={handleSave} className="space-y-4">
-                        <input type="text" placeholder="المدينة" required value={formData.CITYNAME} onChange={e => setFormData({...formData, CITYNAME: e.target.value})} className="w-full p-3 border rounded-xl" />
-                        <input type="text" placeholder="كود ODB" required value={formData.ODB_ID} onChange={e => setFormData({...formData, ODB_ID: e.target.value})} className="w-full p-3 border rounded-xl" />
-                        <div className="flex gap-2">
-                            <input type="number" placeholder="Lat" required value={formData.LATITUDE} onChange={e => setFormData({...formData, LATITUDE: parseFloat(e.target.value)})} className="w-full p-3 border rounded-xl" />
-                            <input type="number" placeholder="Lng" required value={formData.LONGITUDE} onChange={e => setFormData({...formData, LONGITUDE: parseFloat(e.target.value)})} className="w-full p-3 border rounded-xl" />
-                        </div>
-                        <textarea placeholder="ملاحظات" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full p-3 border rounded-xl h-20"></textarea>
-                        <label className="block w-full p-3 border border-dashed rounded-xl text-center cursor-pointer">
-                            {formData.image ? 'تغيير الصورة' : 'إضافة صورة'}
-                            <input type="file" hidden onChange={handleImageCapture} />
-                        </label>
-                    </form>
-                </PermissionGuard>
-            </div>
-            <div className="p-4 border-t">
-                <PermissionGuard user={user} resource="odb" action={formData.id ? 'edit' : 'create'}>
-                     <button form="locForm" disabled={isSaving} className="w-full bg-primary text-white py-3 rounded-xl font-bold">{isSaving ? '...' : 'حفظ'}</button>
-                </PermissionGuard>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Unified Location Modal */}
+      <LocationModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        mode={modalMode}
+        data={selectedLocation}
+        user={user}
+        context="default"
+        onSave={handleSaveLocation}
+        onEdit={handleSwitchToEdit}
+      />
     </div>
   );
 };

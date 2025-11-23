@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { ODBLocation, NearbyLocation, User } from '../types';
 import { getNearbyLocationsAPI, saveODBLocation, getSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
+import { LocationModal } from './LocationModal';
 
 interface NearbyPlacesProps {
   user: User;
@@ -16,26 +17,10 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); 
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
-  
-  // Success Toast State
+  const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
+  const [selectedLocation, setSelectedLocation] = useState<Partial<ODBLocation>>({});
+
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-
-  // Ref for file input
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [formData, setFormData] = useState<Partial<ODBLocation>>({
-    id: 0,
-    ODB_ID: '',
-    CITYNAME: '',
-    LATITUDE: 0,
-    LONGITUDE: 0,
-    image: '',
-    notes: '',
-    lastEditedBy: '',
-    lastEditedAt: '',
-  });
 
   const showToast = (msg: string) => {
       setToastMsg(msg);
@@ -93,42 +78,40 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
     }
   };
 
+  // --- Modal Handlers ---
   const handleItemClick = (place: NearbyLocation) => {
-      setFormData({ ...place, notes: place.notes || '' });
-      setIsEditing(false);
+      setSelectedLocation(place);
+      setModalMode('view');
       setIsModalOpen(true);
   };
 
   const handleEditClick = (e: React.MouseEvent, place: NearbyLocation) => {
       e.stopPropagation();
-      e.preventDefault();
-      setFormData({ ...place, notes: place.notes || '' });
-      setIsEditing(true);
+      setSelectedLocation(place);
+      setModalMode('edit');
       setIsModalOpen(true);
   };
 
-  const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setFormData(prev => ({ ...prev, image: reader.result as string }));
-        };
-        reader.readAsDataURL(file);
+  const handleSave = async (data: ODBLocation) => {
+    try {
+        await saveODBLocation(data);
+        
+        // Update local list
+        setNearbyPlaces(prev => prev.map(p => {
+            if (p.id === data.id) {
+                return { ...p, ...data, distance: p.distance };
+            }
+            return p;
+        }));
+
+        showToast('تم حفظ التعديلات بنجاح');
+    } catch (e) {
+        alert('فشل الحفظ في قاعدة البيانات');
     }
   };
 
-  const triggerCamera = () => {
-      fileInputRef.current?.click();
-  };
-
-  const handleGetDirections = (e?: React.MouseEvent) => {
-      if(e) e.stopPropagation();
-      if (!formData.LATITUDE || !formData.LONGITUDE) return;
-
-      const dest = `${formData.LATITUDE},${formData.LONGITUDE}`;
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
-      window.open(url, '_blank');
+  const handleSwitchToEdit = () => {
+      setModalMode('edit');
   };
 
   const handleDirectDirections = (e: React.MouseEvent, lat: number, lng: number) => {
@@ -136,44 +119,6 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       const dest = `${lat},${lng}`;
       const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
       window.open(url, '_blank');
-  };
-
-  const handleSave = async () => {
-    if (!formData.CITYNAME || !formData.ODB_ID || !formData.id) {
-        alert('حدث خطأ: بيانات الموقع غير مكتملة.');
-        return;
-    }
-
-    const now = new Date();
-    const locToSave: ODBLocation = {
-        id: formData.id,
-        ODB_ID: formData.ODB_ID,
-        CITYNAME: formData.CITYNAME,
-        LATITUDE: Number(formData.LATITUDE),
-        LONGITUDE: Number(formData.LONGITUDE),
-        image: formData.image,
-        notes: formData.notes,
-        // Use username preferred, fallback to name, or generic fallback
-        lastEditedBy: user.username || user.name || 'Admin',
-        lastEditedAt: now.toISOString(),
-    };
-
-    try {
-        await saveODBLocation(locToSave);
-
-        setNearbyPlaces(prev => prev.map(p => {
-            if (p.id === locToSave.id) {
-                return { ...p, ...locToSave, distance: (p as NearbyLocation).distance };
-            }
-            return p;
-        }));
-
-        showToast('تم حفظ التعديلات بنجاح');
-        setIsEditing(false);
-        setFormData(locToSave);
-    } catch (e) {
-        alert('فشل الحفظ في قاعدة البيانات');
-    }
   };
 
   return (
@@ -187,7 +132,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
           </div>
       )}
 
-      {/* Top Banner - Reduced Size & Compact */}
+      {/* Top Banner */}
       <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl p-3 md:p-4 text-white shadow-lg relative overflow-hidden shrink-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div className="flex items-center justify-between w-full md:w-auto">
             <div className="min-w-0">
@@ -311,64 +256,17 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
          <div className="text-center py-8 text-gray-400 text-xs">لا توجد مواقع قريبة في النطاق المحدد</div>
       )}
 
-      {/* Modal - kept simpler */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-          <div className="relative bg-white w-full md:w-96 rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-10">
-            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                <h3 className="font-bold">{isEditing ? 'تعديل' : formData.CITYNAME}</h3>
-                <button onClick={() => setIsModalOpen(false)}><Icons.X /></button>
-            </div>
-            <div className="p-4 overflow-y-auto space-y-4">
-                {!isEditing ? (
-                    <>
-                        {formData.image && <img src={formData.image} className="w-full h-40 object-cover rounded-lg" />}
-                        
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs bg-gray-50 p-2 rounded-lg">
-                            <div className="bg-white p-1.5 rounded border border-gray-100 shadow-sm">
-                                <span className="block text-[10px] text-gray-400 uppercase mb-0.5">ODB_ID</span>
-                                <span className="font-mono font-bold text-blue-600 text-sm break-all">{formData.ODB_ID}</span>
-                            </div>
-                            <div className="bg-white p-1.5 rounded border border-gray-100 shadow-sm flex flex-col justify-center">
-                                <span className="block text-[10px] text-gray-400 uppercase mb-0.5">Lat</span>
-                                <span className="font-bold text-gray-800">{formData.LATITUDE?.toFixed(5)}</span>
-                            </div>
-                            <div className="bg-white p-1.5 rounded border border-gray-100 shadow-sm flex flex-col justify-center">
-                                <span className="block text-[10px] text-gray-400 uppercase mb-0.5">Lng</span>
-                                <span className="font-bold text-gray-800">{formData.LONGITUDE?.toFixed(5)}</span>
-                            </div>
-                        </div>
-
-                        <div className="bg-yellow-50 p-3 rounded-lg text-sm text-gray-700 min-h-[60px]">{formData.notes || 'لا توجد ملاحظات'}</div>
-                        
-                        {/* NEW: Added Metadata section */}
-                        <div className="text-center border-t pt-3 mt-2">
-                            <p className="text-[10px] text-gray-400">
-                                آخر تعديل بواسطة <span className="font-bold text-gray-600">{formData.lastEditedBy || 'غير مسجل'}</span>
-                            </p>
-                            <p className="text-[9px] text-gray-300 mt-0.5 font-mono">
-                                {formData.lastEditedAt ? new Date(formData.lastEditedAt).toLocaleString('ar-EG') : '-'}
-                            </p>
-                        </div>
-
-                        <button onClick={(e) => handleGetDirections(e)} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Icons.Navigation /> اذهب للموقع</button>
-                        <button onClick={() => setIsEditing(true)} className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold">تعديل البيانات</button>
-                    </>
-                ) : (
-                    <>
-                        <textarea value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full p-3 border rounded-lg h-32" placeholder="الملاحظات..."></textarea>
-                        <div onClick={triggerCamera} className="w-full p-4 border-2 border-dashed rounded-lg text-center cursor-pointer text-blue-500">
-                             <Icons.Camera /> {formData.image ? 'تغيير الصورة' : 'التقاط صورة'}
-                        </div>
-                        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleImageCapture} />
-                        <button onClick={handleSave} className="w-full bg-black text-white py-3 rounded-xl font-bold">حفظ</button>
-                    </>
-                )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Unified Location Modal */}
+      <LocationModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        mode={modalMode}
+        data={selectedLocation}
+        user={user}
+        context="nearby"
+        onSave={handleSave}
+        onEdit={handleSwitchToEdit}
+      />
     </div>
   );
 };
