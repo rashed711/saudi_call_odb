@@ -13,6 +13,7 @@ interface ODBTableProps {
 const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
   const [locations, setLocations] = useState<ODBLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   // Pagination & Search States
   const [page, setPage] = useState(1);
@@ -42,6 +43,7 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
 
   const fetchLocations = async (signal?: AbortSignal) => {
       setLoading(true);
+      setErrorMsg(null);
       try {
           const result = await getODBLocationsPaginated(page, limit, debouncedSearch, signal);
           // Filter duplicates locally if any slip through
@@ -52,7 +54,10 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
           setTotalItems(result.total);
           setTotalPages(result.totalPages);
       } catch (error: any) {
-          if (error.name !== 'AbortError') console.error("Error fetching locations:", error);
+          if (error.name !== 'AbortError') {
+              console.error("Error fetching locations:", error);
+              setErrorMsg(error.message);
+          }
       } finally {
            if (!signal?.aborted) setLoading(false);
       }
@@ -76,6 +81,7 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
   // --- Modal Handlers ---
 
   const handleRowClick = (loc: ODBLocation) => {
+    // We only pass the ID and basic info. The modal will fetch the heavy image.
     setSelectedLocation(loc);
     setModalMode('view');
     setIsModalOpen(true);
@@ -99,8 +105,6 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
     try {
         await saveODBLocation(data);
         await fetchLocations();
-        // If it was a create action, we might want to close, if edit, keep view open?
-        // Prompt says "Save or Cancel". Usually save closes modal.
     } catch (error: any) {
         alert("Error saving: " + error.message);
     }
@@ -197,6 +201,17 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
         </div>
       </div>
 
+      {/* Error Message Display */}
+      {errorMsg && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-center gap-3 mb-4 mx-1">
+            <Icons.Ban />
+            <div className="text-sm font-bold">
+                {errorMsg}
+                <div className="text-xs font-normal mt-1 opacity-75">يرجى التأكد من تشغيل السيرفر وتحديث ملف api.php بشكل صحيح.</div>
+            </div>
+        </div>
+      )}
+
       {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
         <div className="fixed bottom-28 left-4 right-4 md:absolute md:top-20 md:z-30 bg-slate-900 text-white p-3 rounded-xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4">
@@ -225,10 +240,15 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
           </thead>
           <tbody>
             {loading ? ( <tr><td colSpan={4} className="text-center py-20">...</td></tr> ) : 
+             locations.length === 0 && !errorMsg ? ( <tr><td colSpan={4} className="text-center py-20 text-gray-400">لا توجد نتائج</td></tr> ) :
              locations.map((loc) => (
                 <tr key={loc.id} onClick={() => handleRowClick(loc)} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${selectedIds.includes(loc.id) ? 'bg-blue-50' : ''}`}>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(loc.id)} onChange={(e) => { e.stopPropagation(); handleSelectRow(loc.id); }} /></td>
-                    <td className="py-3 px-4 font-medium flex items-center gap-2">{loc.image && <Icons.MapPin />}{loc.CITYNAME}</td>
+                    <td className="py-3 px-4 font-medium flex items-center gap-2">
+                        {/* Always use icon, never assume image is present in list */}
+                        <div className="text-gray-400"><Icons.MapPin /></div>
+                        {loc.CITYNAME}
+                    </td>
                     <td className="py-3 px-4 text-blue-600 font-mono text-sm">{loc.ODB_ID}</td>
                     <td className="py-3 px-4 text-center">
                         <PermissionGuard user={user} resource="odb" action="delete">
@@ -246,10 +266,16 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
         {locations.map((loc) => (
             <div key={loc.id} className={`bg-white rounded-2xl p-4 shadow-sm border ${selectedIds.includes(loc.id) ? 'border-primary bg-blue-50' : 'border-gray-100'}`} onClick={() => handleRowClick(loc)}>
                 <div className="flex justify-between">
-                    <h3 className="font-bold">{loc.CITYNAME}</h3>
-                    <span className="text-xs bg-gray-100 px-2 rounded">{loc.ODB_ID}</span>
+                    <h3 className="font-bold flex items-center gap-2">
+                         <span className="text-gray-400"><Icons.MapPin /></span>
+                         {loc.CITYNAME}
+                    </h3>
+                    <span className="text-xs bg-gray-100 px-2 rounded h-fit py-0.5">{loc.ODB_ID}</span>
                 </div>
                 <div className="mt-3 flex justify-between items-center border-t pt-2">
+                     <div className="text-[10px] text-gray-400">
+                         {loc.lastEditedAt ? loc.lastEditedAt.split('T')[0] : ''}
+                     </div>
                      <PermissionGuard user={user} resource="odb" action="delete">
                          <button onClick={(e) => handleDeleteRow(e, loc.id, loc.CITYNAME)} className="text-red-500"><Icons.Trash /></button>
                      </PermissionGuard>

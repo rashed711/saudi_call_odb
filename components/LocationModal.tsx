@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ODBLocation, User } from '../types';
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
+import { getLocationDetails } from '../services/mockBackend'; // Import the new service
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface LocationModalProps {
   user: User;
   context: 'default' | 'nearby' | 'my_activity';
   onSave: (data: ODBLocation) => Promise<void>;
-  onEdit?: () => void; // Trigger to switch to edit mode
+  onEdit?: () => void;
 }
 
 export const LocationModal: React.FC<LocationModalProps> = ({
@@ -28,16 +29,38 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const [formData, setFormData] = useState<Partial<ODBLocation>>(data);
   const [isZoomed, setIsZoomed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync internal state when data opens
+  // Sync internal state and fetch full details when data opens
   useEffect(() => {
     if (isOpen) {
-      setFormData(data);
+      setFormData(data); // Set initial data (might lack image)
       setIsZoomed(false);
       setIsSaving(false);
+      
+      // LAZY LOADING STRATEGY:
+      // If we are in 'view' or 'edit' mode and we have an ID, fetch the full details (image)
+      if (mode !== 'create' && data.id) {
+          fetchDetails(data.id);
+      }
     }
-  }, [isOpen, data]);
+  }, [isOpen, data]); // Re-run if data.id changes essentially
+
+  const fetchDetails = async (id: number) => {
+      setIsLoadingDetails(true);
+      try {
+          // Fetch full data including image from backend
+          const fullData = await getLocationDetails(id);
+          // Update state with full data, preserving any local edits if we were already editing? 
+          // Usually better to just overwrite with fresh data on open.
+          setFormData(fullData);
+      } catch (error) {
+          console.error("Failed to load details:", error);
+      } finally {
+          setIsLoadingDetails(false);
+      }
+  };
 
   if (!isOpen) return null;
 
@@ -45,23 +68,21 @@ export const LocationModal: React.FC<LocationModalProps> = ({
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Basic Validation
       if (!formData.CITYNAME || !formData.ODB_ID) {
         alert('يرجى إدخال اسم المدينة و كود ODB');
         setIsSaving(false);
         return;
       }
 
-      // Construct final object
       const locationToSave: ODBLocation = {
         id: formData.id || 0,
         ODB_ID: formData.ODB_ID,
         CITYNAME: formData.CITYNAME,
         LATITUDE: Number(formData.LATITUDE),
         LONGITUDE: Number(formData.LONGITUDE),
-        image: formData.image,
+        image: formData.image, // Use the image from state (loaded or updated)
         notes: formData.notes,
-        lastEditedBy: user.username, // Current user is editing
+        lastEditedBy: user.username,
         lastEditedAt: new Date().toISOString()
       };
 
@@ -100,8 +121,14 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const renderViewMode = () => (
     <div className="flex flex-col h-full bg-white md:rounded-2xl overflow-hidden">
         {/* Header Image or Placeholder */}
-        <div className="relative h-48 md:h-56 bg-gray-100 shrink-0 group cursor-pointer" onClick={() => formData.image && setIsZoomed(true)}>
-            {formData.image ? (
+        <div className="relative h-48 md:h-56 bg-gray-100 shrink-0 group cursor-pointer border-b border-gray-200" onClick={() => !isLoadingDetails && formData.image && setIsZoomed(true)}>
+            {isLoadingDetails ? (
+                // LOADING SKELETON FOR IMAGE
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 animate-pulse">
+                     <Icons.Camera />
+                     <span className="mt-2 text-xs font-bold text-gray-400">جاري تحميل الصورة...</span>
+                </div>
+            ) : formData.image ? (
                 <>
                     <img src={formData.image} className="w-full h-full object-cover" alt="Location" />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -118,7 +145,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             )}
             
             {/* Overlay Header */}
-            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 text-white">
+            <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 text-white pointer-events-none">
                 <div className="flex justify-between items-end">
                     <div>
                         <h2 className="text-xl md:text-2xl font-bold leading-none shadow-black drop-shadow-md">{formData.CITYNAME}</h2>
@@ -129,7 +156,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </div>
             </div>
 
-            <button onClick={onClose} className="absolute top-4 left-4 bg-black/20 hover:bg-black/40 text-white p-1.5 rounded-full backdrop-blur-md z-10 transition-colors">
+            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 left-4 bg-black/20 hover:bg-black/40 text-white p-1.5 rounded-full backdrop-blur-md z-10 transition-colors">
                 <Icons.X />
             </button>
         </div>
@@ -154,9 +181,16 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
                     <Icons.Edit /> الملاحظات
                 </h3>
-                <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-xl text-sm text-gray-700 leading-relaxed min-h-[80px]">
-                    {formData.notes ? formData.notes : <span className="text-gray-400 italic">لا توجد ملاحظات مسجلة لهذا الموقع.</span>}
-                </div>
+                {isLoadingDetails ? (
+                    <div className="space-y-2">
+                        <div className="h-4 bg-gray-100 rounded w-3/4 animate-pulse"></div>
+                        <div className="h-4 bg-gray-100 rounded w-1/2 animate-pulse"></div>
+                    </div>
+                ) : (
+                    <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-xl text-sm text-gray-700 leading-relaxed min-h-[80px]">
+                        {formData.notes ? formData.notes : <span className="text-gray-400 italic">لا توجد ملاحظات مسجلة لهذا الموقع.</span>}
+                    </div>
+                )}
             </div>
 
             {/* Metadata */}
@@ -179,7 +213,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </button>
             )}
 
-            {/* Edit Button - Subject to Permissions */}
             <PermissionGuard user={user} resource={context === 'my_activity' ? 'my_activity' : 'odb'} action="edit">
                 <button 
                     onClick={onEdit} 
@@ -189,7 +222,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </button>
             </PermissionGuard>
 
-            {/* Cancel/Close Button */}
             <button onClick={onClose} className="px-5 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-100 transition-colors">
                 إغلاق
             </button>
@@ -209,6 +241,12 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         </div>
 
         <form id="locationForm" onSubmit={handleSaveInternal} className="flex-1 overflow-y-auto p-5 space-y-5">
+            {isLoadingDetails && (
+                <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-xs font-bold text-center">
+                    جاري جلب أحدث البيانات للموقع...
+                </div>
+            )}
+            
             {/* Basic Info */}
             <div className="space-y-4">
                 <div className="space-y-1">
@@ -220,6 +258,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         onChange={e => setFormData({...formData, CITYNAME: e.target.value})}
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
                         placeholder="أدخل اسم الموقع"
+                        disabled={isLoadingDetails}
                     />
                 </div>
                 <div className="space-y-1">
@@ -231,6 +270,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         onChange={e => setFormData({...formData, ODB_ID: e.target.value})}
                         className="w-full p-3 border border-gray-200 rounded-xl font-mono focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
                         placeholder="ODB-XXXX"
+                        disabled={isLoadingDetails}
                     />
                 </div>
             </div>
@@ -246,6 +286,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         value={formData.LATITUDE || ''} 
                         onChange={e => setFormData({...formData, LATITUDE: parseFloat(e.target.value)})}
                         className="w-full p-2 border border-gray-200 rounded-lg text-sm text-center font-mono focus:ring-2 focus:ring-primary outline-none"
+                        disabled={isLoadingDetails}
                     />
                 </div>
                 <div className="space-y-1">
@@ -257,6 +298,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         value={formData.LONGITUDE || ''} 
                         onChange={e => setFormData({...formData, LONGITUDE: parseFloat(e.target.value)})}
                         className="w-full p-2 border border-gray-200 rounded-lg text-sm text-center font-mono focus:ring-2 focus:ring-primary outline-none"
+                        disabled={isLoadingDetails}
                     />
                 </div>
             </div>
@@ -264,7 +306,9 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             {/* Image Section */}
             <div>
                 <label className="text-xs font-bold text-gray-500 block mb-2">صورة الموقع</label>
-                {formData.image ? (
+                {isLoadingDetails ? (
+                    <div className="h-32 bg-gray-100 rounded-xl animate-pulse"></div>
+                ) : formData.image ? (
                     <div className="relative rounded-xl overflow-hidden border border-gray-200 group h-48">
                         <img src={formData.image} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
@@ -296,6 +340,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                     onChange={e => setFormData({...formData, notes: e.target.value})}
                     className="w-full p-3 border border-gray-200 rounded-xl h-24 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all resize-none"
                     placeholder="اكتب أي ملاحظات إضافية هنا..."
+                    disabled={isLoadingDetails}
                 ></textarea>
             </div>
         </form>
@@ -304,7 +349,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             <button onClick={onClose} type="button" className="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-100 transition-colors">
                 إلغاء
             </button>
-            <button form="locationForm" type="submit" disabled={isSaving} className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70">
+            <button form="locationForm" type="submit" disabled={isSaving || isLoadingDetails} className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70">
                 {isSaving ? 'جاري الحفظ...' : 'حفظ التعديلات'}
             </button>
         </div>

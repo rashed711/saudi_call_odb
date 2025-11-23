@@ -64,7 +64,6 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
             settings.maxResults
         );
 
-        // Filter duplicates based on ODB_ID to prevent multiple occurrences
         const uniquePlaces = places.filter((place, index, self) => 
             index === self.findIndex((t) => t.ODB_ID === place.ODB_ID)
         );
@@ -206,7 +205,8 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                     {nearbyPlaces.map((place) => (
                         <tr key={place.ODB_ID} onClick={() => handleItemClick(place)} className="border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors">
                             <td className="py-3 px-4 font-medium flex items-center gap-2">
-                                {place.image ? <img src={place.image} className="w-6 h-6 rounded object-cover" /> : <Icons.MapPin />}
+                                {/* Always use generic Icon, no image preview in list */}
+                                <div className="text-gray-400"><Icons.MapPin /></div>
                                 {place.CITYNAME}
                             </td>
                             <td className="py-3 px-4 text-sm font-bold text-green-600">{place.distance.toFixed(2)} كم</td>

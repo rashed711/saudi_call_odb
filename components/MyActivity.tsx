@@ -99,7 +99,8 @@ const MyActivity: React.FC<Props> = ({ user }) => {
                                 <tr key={loc.id} onClick={() => handleView(loc)} className="hover:bg-gray-50 cursor-pointer transition-colors">
                                     <td className="px-4 py-3 md:px-6">
                                         <div className="font-bold text-gray-800 text-sm flex items-center gap-2">
-                                            {loc.image ? <Icons.MapPin /> : <span className="w-4 h-4 rounded-full bg-gray-200"></span>}
+                                            {/* Generic icon instead of conditional image */}
+                                            <div className="text-gray-400"><Icons.MapPin /></div>
                                             {loc.CITYNAME}
                                         </div>
                                         <div className="md:hidden text-xs text-blue-600 font-mono mt-1">{loc.ODB_ID}</div>

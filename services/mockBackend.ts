@@ -51,26 +51,40 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
 
     try {
         const response = await fetch(url, options);
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.indexOf("application/json") === -1) {
-             // Try to get text to debug
-             const text = await response.text();
-             // If response is empty or HTML 404, throw helpful error
-             throw new Error(`Server Error: ${response.status} ${response.statusText}`);
+        
+        // Handle generic HTTP errors first
+        if (!response.ok) {
+            throw new Error(`Server Error (${response.status}): ${response.statusText}`);
         }
-        const text = await response.text();
-        let data;
-        try { data = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON Response'); }
 
-        if (response.ok) {
-            if (data.error) throw new Error(data.error);
-            return data;
-        } else {
-            throw new Error(data.error || `HTTP Error: ${response.status}`);
+        const text = await response.text();
+        
+        // Attempt to parse JSON
+        let data;
+        try { 
+            data = JSON.parse(text); 
+        } catch (e) { 
+            console.error("Non-JSON Response from Server:", text);
+            // Check if it's a PHP Fatal Error
+            if (text.includes("Fatal error") || text.includes("Parse error")) {
+                throw new Error("خطأ برمجي في السيرفر (PHP Error). يرجى مراجعة ملف api.php");
+            }
+            throw new Error('الخادم أرسل استجابة غير صحيحة (Invalid JSON)'); 
         }
+
+        // Check for logic error from API
+        if (data.error) throw new Error(data.error);
+        
+        return data;
+
     } catch (error: any) {
         if (error.name === 'AbortError') throw error;
-        // Suppress log if silent is requested (useful for optional endpoints like settings)
+        
+        // Friendly error message for "Failed to fetch" (CORS/Network)
+        if (error.message === 'Failed to fetch') {
+             throw new Error("فشل الاتصال بالسيرفر. تأكد من إعدادات CORS في ملف api.php أو اتصال الإنترنت.");
+        }
+
         if (!silent) console.error(`API Request Failed [${action}]:`, error);
         throw error;
     }
@@ -78,13 +92,9 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
 
 // --- AUTH & PERMISSIONS ---
 export const mockLogin = async (username: string, pass: string): Promise<User> => {
-    // Real login to verify credentials
     const user = await apiRequest('login', 'POST', { username, password: pass });
     
-    // INJECT PERMISSIONS (Simulation since DB might not have them yet)
-    // In a real app, these come from the DB. Here we attach defaults if missing.
     let finalUser = { ...user };
-    // Parse permissions if they come as string from DB
     if (typeof finalUser.permissions === 'string') {
         try { finalUser.permissions = JSON.parse(finalUser.permissions); } catch(e) { finalUser.permissions = null; }
     }
@@ -95,7 +105,6 @@ export const mockLogin = async (username: string, pass: string): Promise<User> =
         else finalUser.permissions = DELEGATE_PERMISSIONS;
     }
     
-    // Normalize ID
     finalUser.id = Number(finalUser.id);
     finalUser.supervisorId = finalUser.supervisorId ? Number(finalUser.supervisorId) : null;
 
@@ -112,19 +121,16 @@ export const getSession = (): User | null => {
   return data ? JSON.parse(data) : null;
 };
 
-// Helper to check permissions
 export const hasPermission = (user: User, resource: string, action: string): boolean => {
     if (!user) return false;
-    if (user.role === 'admin') return true; // Admin has all power
+    if (user.role === 'admin') return true; 
     const resPerm = user.permissions.find(p => p.resource === resource);
     return resPerm ? resPerm.actions.includes(action as any) : false;
 };
 
-// --- USER MANAGEMENT (HIERARCHY AWARE) ---
+// --- USER MANAGEMENT ---
 export const getUsers = async (currentUser: User): Promise<User[]> => {
     const allUsers = await apiRequest('get_users');
-    
-    // Map & Clean
     let usersList = allUsers.map((u: any) => ({
         ...u,
         id: Number(u.id),
@@ -133,26 +139,16 @@ export const getUsers = async (currentUser: User): Promise<User[]> => {
         permissions: u.permissions ? (typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions) : (u.role === 'admin' ? ADMIN_PERMISSIONS : (u.role === 'supervisor' ? SUPERVISOR_PERMISSIONS : DELEGATE_PERMISSIONS))
     }));
 
-    // HIERARCHY FILTER
     if (currentUser.role === 'supervisor') {
-        // Supervisor sees only themselves and their delegates
         return usersList.filter((u: User) => u.id === currentUser.id || u.supervisorId === currentUser.id);
     } else if (currentUser.role === 'delegate') {
-        // Delegate sees only themselves
         return usersList.filter((u: User) => u.id === currentUser.id);
     }
-
-    // Admin sees everyone
     return usersList;
 };
 
 export const saveUser = async (userToSave: User): Promise<void> => {
-    // Convert permissions array to string for DB storage
-    const payload = {
-        ...userToSave,
-        permissions: userToSave.permissions // Send as array, let PHP encode it
-    };
-    
+    const payload = { ...userToSave, permissions: userToSave.permissions };
     await apiRequest('save_user', 'POST', payload);
 };
 
@@ -164,29 +160,56 @@ export const toggleUserStatus = async (id: number): Promise<void> => {
     await apiRequest(`toggle_user_status&id=${id}`, 'GET');
 };
 
-// --- LOCATIONS & ACTIVITY ---
+// --- LOCATIONS & ACTIVITY (OPTIMIZED) ---
 
+// 1. Get List (LIGHTWEIGHT - No Images)
 export const getODBLocationsPaginated = async (page: number, limit: number, search: string = '', signal?: AbortSignal): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
-    const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
-    const mappedData = result.data.map((loc: any) => ({
+    try {
+        const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
+        const mappedData = result.data.map((loc: any) => ({
+            ...loc,
+            id: Number(loc.id),
+            ODB_ID: loc.ODB_ID || loc.odb_id,
+            CITYNAME: loc.CITYNAME || loc.city_name,
+            LATITUDE: Number(loc.LATITUDE || loc.latitude),
+            LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
+            lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
+            lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+            // OPTIMIZATION: Do NOT map the image here to save bandwidth. 
+            image: undefined 
+        }));
+        return { data: mappedData, total: Number(result.total), totalPages: Number(result.totalPages) };
+    } catch (e: any) {
+        if (e.message.includes("Invalid JSON")) {
+             console.error("Backend returned invalid JSON. Possible PHP Error.");
+        }
+        throw e;
+    }
+};
+
+// 2. Get Single Location Details (HEAVY - With Image)
+export const getLocationDetails = async (id: number): Promise<ODBLocation> => {
+    const result = await apiRequest(`get_location_details&id=${id}`, 'GET');
+    
+    // Support both single object and array return
+    const loc = Array.isArray(result) ? result[0] : result;
+    
+    if (!loc) throw new Error("الموقع غير موجود");
+
+    return {
         ...loc,
         id: Number(loc.id),
-        // Map various casing possibilities to ensure Frontend gets data
         ODB_ID: loc.ODB_ID || loc.odb_id,
         CITYNAME: loc.CITYNAME || loc.city_name,
         LATITUDE: Number(loc.LATITUDE || loc.latitude),
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
-        // Map snake_case from DB to camelCase for Frontend
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
-        lastEditedAt: loc.last_edited_at || loc.lastEditedAt
-    }));
-    return { data: mappedData, total: Number(result.total), totalPages: Number(result.totalPages) };
+        lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+        image: loc.image // Here we DO include the image
+    };
 };
 
-// NEW: Get My Activity (Filtered by username/editor)
 export const getMyActivity = async (username: string, page: number = 1, limit: number = 20): Promise<{data: ODBLocation[], total: number}> => {
-    // SECURITY UPDATE: Use 'editor' parameter instead of 'search'.
-    // This forces the backend to filter strictly by 'last_edited_by = username'
     const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&editor=${encodeURIComponent(username)}`, 'GET');
     
     const mappedData = result.data.map((loc: any) => ({
@@ -196,9 +219,9 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
         CITYNAME: loc.CITYNAME || loc.city_name,
         LATITUDE: Number(loc.LATITUDE || loc.latitude),
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
-        // Map snake_case from DB to camelCase for Frontend
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
-        lastEditedAt: loc.last_edited_at || loc.lastEditedAt
+        lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+        image: undefined // OPTIMIZATION: No image in list
     }));
     
     return { data: mappedData, total: Number(result.total) };
@@ -207,6 +230,12 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
 export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: number, limit: number): Promise<NearbyLocation[]> => {
     const effectiveRadius = radius === 0 ? 20000 : radius;
     const data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
+    
+    if (!Array.isArray(data)) {
+        console.error("Expected array for nearby locations, got:", data);
+        return [];
+    }
+
     return data.map((loc: any) => ({
         ...loc,
         id: Number(loc.id),
@@ -215,17 +244,15 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
         LATITUDE: Number(loc.LATITUDE || loc.latitude),
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         distance: Number(loc.distance),
-        // Map snake_case from DB to camelCase for Frontend
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
-        lastEditedAt: loc.last_edited_at || loc.lastEditedAt
+        lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+        image: undefined // OPTIMIZATION: No image in list
     }));
 };
 
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
-    // Ensure we send snake_case keys for the backend to understand
     const payload = {
         ...location,
-        // Send fields that match backend expectations if necessary (PHP normally reads ODB_ID/CITYNAME from input array)
         last_edited_by: location.lastEditedBy,
         last_edited_at: location.lastEditedAt
     };
@@ -244,11 +271,9 @@ export const deleteODBLocation = async (id: number): Promise<void> => {
 // --- SITE SETTINGS ---
 export const getSiteSettings = async (): Promise<SiteSettings> => {
     try {
-        // Pass silent=true to suppress console errors if endpoint is missing or failing
         const settings = await apiRequest('get_settings', 'GET', null, undefined, true);
         return { ...DEFAULT_SETTINGS, ...settings, searchRadius: Number(settings.searchRadius), maxResults: Number(settings.maxResults) };
     } catch (e) {
-        // Just fallback to defaults without noise
         return DEFAULT_SETTINGS;
     }
 };
