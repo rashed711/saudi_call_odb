@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getAllLocationsForMap, saveODBLocation, getSiteSettings } from '../services/mockBackend';
+import { getAllLocationsForMap, saveODBLocation, getSiteSettings, getNearbyLocationsAPI } from '../services/mockBackend';
 import { ODBLocation, User, SiteSettings } from '../types';
 import { Icons } from './Icons';
 import { LocationModal } from './LocationModal';
@@ -111,40 +111,58 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
   const initializeData = async () => {
       setLoading(true);
       try {
-          // 1. Fetch All Data and Settings in parallel
-          const [data, currentSettings] = await Promise.all([
-              getAllLocationsForMap(),
-              getSiteSettings()
-          ]);
-          
-          setAllLocations(data);
+          // 1. Fetch Settings & General Data
+          const currentSettings = await getSiteSettings();
           setSettings(currentSettings);
 
-          // 2. Try to get User Location
+          // Get the general pool of data (e.g. recent 500) to support map browsing
+          const generalData = await getAllLocationsForMap();
+          
+          // 2. Try to get User Location & Specific Nearby Data
           if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
-                  (position) => {
+                  async (position) => {
                       const { latitude, longitude } = position.coords;
-                      handleLocationFound(latitude, longitude, data, currentSettings);
+                      
+                      // CRITICAL FIX: Fetch actual nearby locations from server to ensure
+                      // the nearest items are present, even if they are old/not in general list.
+                      const limit = currentSettings.maxResults || 20;
+                      // Pass searchRadius if set, otherwise 0 for "nearest whatever distance"
+                      const nearbyData = await getNearbyLocationsAPI(
+                          latitude, 
+                          longitude, 
+                          currentSettings.searchRadius, 
+                          limit
+                      );
+
+                      // Merge General + Nearby (Deduplicate by ID)
+                      const combinedMap = new Map();
+                      generalData.forEach(item => combinedMap.set(item.id, item));
+                      nearbyData.forEach(item => combinedMap.set(item.id, item)); // Nearby overwrites (ensures presence)
+                      
+                      const mergedData = Array.from(combinedMap.values()) as LocationWithDistance[];
+
+                      handleLocationFound(latitude, longitude, mergedData, currentSettings);
                   },
                   (error) => {
                       console.warn("Location access denied or error:", error);
-                      // Fallback: Show limit based on settings or default 20
+                      // Fallback: Use only general data
                       const limit = currentSettings.maxResults || 20;
-                      setFilteredLocations(data.slice(0, limit));
-                      renderMarkers(data.slice(0, limit));
+                      setAllLocations(generalData);
+                      setFilteredLocations(generalData.slice(0, limit));
+                      renderMarkers(generalData.slice(0, limit));
                   },
                   { enableHighAccuracy: true, timeout: 10000 }
               );
           } else {
               const limit = currentSettings.maxResults || 20;
-              setFilteredLocations(data.slice(0, limit));
-              renderMarkers(data.slice(0, limit));
+              setAllLocations(generalData);
+              setFilteredLocations(generalData.slice(0, limit));
+              renderMarkers(generalData.slice(0, limit));
           }
 
       } catch (e) {
           console.error(e);
-      } finally {
           setLoading(false);
       }
   };
@@ -152,7 +170,7 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
   const handleLocationFound = (lat: number, lng: number, data: LocationWithDistance[], currentSettings: SiteSettings) => {
       setUserPos([lat, lng]);
 
-      // Calculate Distances
+      // Calculate Distances for ALL items relative to user
       const dataWithDist = data.map(loc => ({
           ...loc,
           distance: calcDistance(lat, lng, loc.LATITUDE, loc.LONGITUDE)
@@ -174,6 +192,7 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
 
       setFilteredLocations(topResults);
       setViewMode('nearest');
+      setLoading(false);
 
       // Update Map
       // @ts-ignore

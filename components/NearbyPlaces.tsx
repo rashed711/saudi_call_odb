@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ODBLocation, NearbyLocation, User } from '../types';
+import { ODBLocation, NearbyLocation, User, SiteSettings } from '../types';
 import { getNearbyLocationsAPI, saveODBLocation, getSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
 import { LocationModal } from './LocationModal';
@@ -14,6 +14,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyLocation[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,15 +63,16 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
 
   const processNearby = async (lat: number, lng: number) => {
     try {
-        const settings = await getSiteSettings();
-        // Use settings but ensure we at least try to get 20 if the setting is too low, 
-        // or respect the user's "Nearest 20" wish explicitly.
-        const limit = Math.max(settings.maxResults, 20); 
+        const currentSettings = await getSiteSettings();
+        setSettings(currentSettings); // Update state for UI
+
+        // Use strict settings from Global Configuration
+        const limit = currentSettings.maxResults || 20; 
         
         const places = await getNearbyLocationsAPI(
             lat, 
             lng, 
-            settings.searchRadius, 
+            currentSettings.searchRadius, 
             limit
         );
 
@@ -198,7 +200,10 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       {/* LOADING SKELETON */}
       {status === 'loading' && (
         <div className="flex flex-col gap-3">
-             <div className="text-center text-gray-400 text-xs animate-pulse mb-2">جاري حساب المسافات لأقرب 20 موقع...</div>
+             <div className="text-center text-gray-400 text-xs animate-pulse mb-2">
+                 جاري البحث عن أقرب {settings?.maxResults || '...'} موقع
+                 {settings?.searchRadius ? ` في نطاق ${settings.searchRadius} كم` : ''}...
+             </div>
              {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse"></div>)}
         </div>
       )}
@@ -269,7 +274,13 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
          <div className="text-center py-12 text-gray-400 flex flex-col items-center">
              <Icons.Search />
              <div className="mt-2 text-sm font-bold">لا توجد مواقع قريبة في النطاق المحدد</div>
-             <div className="text-xs mt-1 opacity-70">حاول زيادة نطاق البحث من الإعدادات</div>
+             {settings && settings.searchRadius > 0 && (
+                <div className="text-xs mt-1 opacity-70">
+                    نطاق البحث الحالي: {settings.searchRadius} كم
+                    <br/>
+                    حاول زيادة النطاق من الإعدادات
+                </div>
+             )}
          </div>
       )}
 
