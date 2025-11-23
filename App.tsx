@@ -10,7 +10,7 @@ import MyActivity from './components/MyActivity';
 import MapFilter from './components/MapFilter';
 import { Icons } from './components/Icons';
 import { User, View } from './types';
-import { getSession, mockLogout, getSiteSettings, applySiteSettings, hasPermission, checkSessionStatus } from './services/mockBackend';
+import { getSession, mockLogout, getSiteSettings, applySiteSettings, hasPermission, refreshUserSession } from './services/mockBackend';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -34,23 +34,49 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Security Heartbeat: Check if user is still active every 5 seconds
+  // 2. Security Heartbeat & Real-Time Permissions Sync
+  // Check if user is active and update permissions every 5 seconds
   useEffect(() => {
     if (!user) return;
 
-    const checkStatus = async () => {
+    const syncSession = async () => {
         try {
-            await checkSessionStatus(user.id);
+            // Fetch fresh user data from server
+            const freshUser = await refreshUserSession(user.id);
+            
+            if (freshUser) {
+                // Check if banned/inactive
+                if (!freshUser.isActive) {
+                    alert('تم إيقاف حسابك من قبل الإدارة. سيتم تسجيل الخروج.');
+                    handleLogoutForce();
+                    return;
+                }
+
+                // Check for Permission/Role changes
+                // We compare the stringified permissions array to detect deep changes
+                const permsChanged = JSON.stringify(freshUser.permissions) !== JSON.stringify(user.permissions);
+                const roleChanged = freshUser.role !== user.role;
+                
+                if (permsChanged || roleChanged) {
+                    console.log("Permissions updated remotely");
+                    // Update state to reflect changes in UI immediately
+                    setUser(freshUser);
+                    // Update localStorage so changes persist on reload
+                    localStorage.setItem('odb_user_session_v3_perm', JSON.stringify(freshUser));
+                }
+            } else {
+                 // If user not found (deleted?), logout
+                 // handleLogoutForce(); // Optional: might be too aggressive if just network error
+            }
         } catch (e: any) {
-            // If request fails with "Forbidden" or explicit account suspension message
-            if (e.message.includes('إيقاف الحساب') || e.message.includes('Forbidden') || e.message.includes('403')) {
-                alert('تم إيقاف حسابك من قبل الإدارة. سيتم تسجيل الخروج.');
+            // Only force logout on specific auth errors, not network errors
+            if (e.message && (e.message.includes('Forbidden') || e.message.includes('403'))) {
                 handleLogoutForce();
             }
         }
     };
 
-    const statusInterval = setInterval(checkStatus, 5000);
+    const statusInterval = setInterval(syncSession, 5000);
     return () => clearInterval(statusInterval);
   }, [user]);
 

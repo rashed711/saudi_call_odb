@@ -140,6 +140,46 @@ export const getSession = (): User | null => {
   return data ? JSON.parse(data) : null;
 };
 
+// New function to support Real-Time Permission Updates
+export const refreshUserSession = async (userId: number): Promise<User | null> => {
+    try {
+        // Fetch all users to find the specific one (Simulating 'get_me' since backend might not have it)
+        const allUsers = await apiRequest('get_users', 'GET', null, undefined, true); // silent request
+        const rawUser = allUsers.find((u: any) => Number(u.id) === userId);
+        
+        if (!rawUser) return null;
+
+        let permissions = rawUser.permissions;
+        if (typeof permissions === 'string') {
+            try { permissions = JSON.parse(permissions); } catch(e) { permissions = null; }
+        }
+
+        if (!permissions || !Array.isArray(permissions)) {
+             if (rawUser.role === 'admin') permissions = ADMIN_PERMISSIONS;
+             else if (rawUser.role === 'supervisor') permissions = SUPERVISOR_PERMISSIONS;
+             else permissions = DELEGATE_PERMISSIONS;
+        }
+
+        const freshUser: User = {
+            id: Number(rawUser.id),
+            username: rawUser.username,
+            name: rawUser.name,
+            email: rawUser.email,
+            role: rawUser.role,
+            supervisorId: rawUser.supervisorId ? Number(rawUser.supervisorId) : null,
+            isActive: rawUser.isActive == 1 || rawUser.isActive === true,
+            permissions: permissions
+        };
+        
+        // Note: We don't automatically update localStorage here to allow the App to decide when to re-render,
+        // but we return the fresh object.
+        return freshUser;
+
+    } catch (e) {
+        return null;
+    }
+};
+
 export const checkSessionStatus = async (userId: number): Promise<void> => {
     await apiRequest(`check_session&id=${userId}`, 'GET', null, undefined, true);
 };
