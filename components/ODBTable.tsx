@@ -116,13 +116,12 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
 
   // --- End Modal Handlers ---
 
-  const handleDeleteRow = async (e: React.MouseEvent, id: number, cityName: string) => {
-      e.stopPropagation(); 
-      const isConfirmed = window.confirm(`هل أنت متأكد من حذف "${cityName}"؟`);
-      if (isConfirmed) {
+  const handleDeleteSingle = async (id: number) => {
+      if (window.confirm(`هل أنت متأكد من حذف هذا الموقع؟`)) {
           await deleteODBLocation(id);
           fetchLocations();
           setSelectedIds(prev => prev.filter(pid => pid !== id));
+          setIsModalOpen(false);
       }
   };
 
@@ -235,12 +234,11 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
               <th className="py-3 px-4 w-12 text-center"><input type="checkbox" onChange={handleSelectAll} checked={locations.length > 0 && selectedIds.length === locations.length} /></th>
               <th className="py-3 px-4 font-semibold">المدينة</th>
               <th className="py-3 px-4 font-semibold">ODB_ID</th>
-              <th className="py-3 px-4 font-semibold text-center">أدوات</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? ( <tr><td colSpan={4} className="text-center py-20">...</td></tr> ) : 
-             locations.length === 0 && !errorMsg ? ( <tr><td colSpan={4} className="text-center py-20 text-gray-400">لا توجد نتائج</td></tr> ) :
+            {loading ? ( <tr><td colSpan={3} className="text-center py-20">...</td></tr> ) : 
+             locations.length === 0 && !errorMsg ? ( <tr><td colSpan={3} className="text-center py-20 text-gray-400">لا توجد نتائج</td></tr> ) :
              locations.map((loc) => (
                 <tr key={loc.id} onClick={() => handleRowClick(loc)} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${selectedIds.includes(loc.id) ? 'bg-blue-50' : ''}`}>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(loc.id)} onChange={(e) => { e.stopPropagation(); handleSelectRow(loc.id); }} /></td>
@@ -250,11 +248,6 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
                         {loc.CITYNAME}
                     </td>
                     <td className="py-3 px-4 text-blue-600 font-mono text-sm">{loc.ODB_ID}</td>
-                    <td className="py-3 px-4 text-center">
-                        <PermissionGuard user={user} resource="odb" action="delete">
-                            <button onClick={(e) => handleDeleteRow(e, loc.id, loc.CITYNAME)} className="p-2 text-gray-400 hover:text-red-600"><Icons.Trash /></button>
-                        </PermissionGuard>
-                    </td>
                 </tr>
             ))}
           </tbody>
@@ -276,9 +269,6 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
                      <div className="text-[10px] text-gray-400">
                          {loc.lastEditedAt ? loc.lastEditedAt.split('T')[0] : ''}
                      </div>
-                     <PermissionGuard user={user} resource="odb" action="delete">
-                         <button onClick={(e) => handleDeleteRow(e, loc.id, loc.CITYNAME)} className="text-red-500"><Icons.Trash /></button>
-                     </PermissionGuard>
                 </div>
             </div>
         ))}
@@ -303,6 +293,7 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
         context="default"
         onSave={handleSaveLocation}
         onEdit={handleSwitchToEdit}
+        onDelete={selectedLocation.id ? () => handleDeleteSingle(selectedLocation.id!) : undefined}
       />
     </div>
   );

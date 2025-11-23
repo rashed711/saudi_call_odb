@@ -242,8 +242,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                                 </div>
                             </div>
                             <div className="flex flex-col gap-1 border-r border-gray-100 pr-2 mr-1">
-                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="text-blue-500"><Icons.Navigation /></button>
-                                <button onClick={(e) => handleEditClick(e, place)} className="text-purple-500"><Icons.Edit /></button>
+                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="text-blue-500 bg-blue-50 p-1.5 rounded-full"><Icons.Navigation /></button>
                             </div>
                         </div>
                     </div>

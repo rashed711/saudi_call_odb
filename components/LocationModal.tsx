@@ -14,6 +14,7 @@ interface LocationModalProps {
   context: 'default' | 'nearby' | 'my_activity';
   onSave: (data: ODBLocation) => Promise<void>;
   onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export const LocationModal: React.FC<LocationModalProps> = ({
@@ -24,7 +25,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   user,
   context,
   onSave,
-  onEdit
+  onEdit,
+  onDelete
 }) => {
   const [formData, setFormData] = useState<Partial<ODBLocation>>(data);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -211,6 +213,14 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 <button onClick={handleGetDirections} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 transition-all active:scale-95">
                     <Icons.Navigation /> <span>اذهب للموقع</span>
                 </button>
+            )}
+            
+            {context === 'default' && onDelete && (
+                <PermissionGuard user={user} resource="odb" action="delete">
+                     <button onClick={onDelete} className="bg-red-50 text-red-600 px-4 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center">
+                        <Icons.Trash />
+                    </button>
+                </PermissionGuard>
             )}
 
             <PermissionGuard user={user} resource={context === 'my_activity' ? 'my_activity' : 'odb'} action="edit">
