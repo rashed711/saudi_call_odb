@@ -51,28 +51,36 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
 
     try {
         const response = await fetch(url, options);
-        
-        // Handle generic HTTP errors first
-        if (!response.ok) {
-            throw new Error(`Server Error (${response.status}): ${response.statusText}`);
-        }
-
         const text = await response.text();
         
-        // Attempt to parse JSON
         let data;
         try { 
             data = JSON.parse(text); 
         } catch (e) { 
-            console.error("Non-JSON Response from Server:", text);
-            // Check if it's a PHP Fatal Error
-            if (text.includes("Fatal error") || text.includes("Parse error")) {
-                throw new Error("خطأ برمجي في السيرفر (PHP Error). يرجى مراجعة ملف api.php");
+            // If response is OK but not JSON, that's an issue
+            if (response.ok) {
+                 console.error("Non-JSON Response from Server:", text);
+                 if (text.includes("Fatal error") || text.includes("Parse error")) {
+                    throw new Error("خطأ برمجي في السيرفر (PHP Error).");
+                 }
+                 throw new Error('الخادم أرسل استجابة غير صحيحة (Invalid JSON)'); 
             }
-            throw new Error('الخادم أرسل استجابة غير صحيحة (Invalid JSON)'); 
+            // If response is NOT OK, we will handle it below
         }
 
-        // Check for logic error from API
+        // Handle HTTP errors (4xx, 5xx)
+        if (!response.ok) {
+            // If the server sent a JSON error message (e.g., { "error": "User exists" }), use it
+            if (data && data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Otherwise, use the status text or a snippet of the raw response
+            const cleanText = text ? text.replace(/<[^>]+>/g, '').trim().substring(0, 150) : response.statusText;
+            throw new Error(`Server Error (${response.status}): ${cleanText}`);
+        }
+
+        // Handle Logic errors inside 200 OK (if any)
         if (data.error) throw new Error(data.error);
         
         return data;
@@ -80,9 +88,8 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
     } catch (error: any) {
         if (error.name === 'AbortError') throw error;
         
-        // Friendly error message for "Failed to fetch" (CORS/Network)
         if (error.message === 'Failed to fetch') {
-             throw new Error("فشل الاتصال بالسيرفر. تأكد من إعدادات CORS في ملف api.php أو اتصال الإنترنت.");
+             throw new Error("فشل الاتصال بالسيرفر. تأكد من تشغيل ملف api.php وإعدادات CORS.");
         }
 
         if (!silent) console.error(`API Request Failed [${action}]:`, error);
@@ -119,6 +126,11 @@ export const mockLogout = () => {
 export const getSession = (): User | null => {
   const data = localStorage.getItem(STORAGE_KEY_USER_SESSION);
   return data ? JSON.parse(data) : null;
+};
+
+export const checkSessionStatus = async (userId: number): Promise<void> => {
+    // Silent request to check if user is still active
+    await apiRequest(`check_session&id=${userId}`, 'GET', null, undefined, true);
 };
 
 export const hasPermission = (user: User, resource: string, action: string): boolean => {

@@ -9,13 +9,14 @@ import UserManagement from './components/UserManagement';
 import MyActivity from './components/MyActivity';
 import { Icons } from './components/Icons';
 import { User, View } from './types';
-import { getSession, mockLogout, getSiteSettings, applySiteSettings, hasPermission } from './services/mockBackend';
+import { getSession, mockLogout, getSiteSettings, applySiteSettings, hasPermission, checkSessionStatus } from './services/mockBackend';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
   const [siteName, setSiteName] = useState('ODB Manager Pro');
 
+  // 1. Load Settings & Session on Mount
   useEffect(() => {
     const session = getSession();
     if (session) setUser(session);
@@ -28,9 +29,29 @@ const App: React.FC = () => {
         } catch (e) {}
     };
     loadSettings();
-    const interval = setInterval(loadSettings, 5000);
+    const interval = setInterval(loadSettings, 10000); // Reload settings every 10s
     return () => clearInterval(interval);
   }, []);
+
+  // 2. Security Heartbeat: Check if user is still active every 5 seconds
+  useEffect(() => {
+    if (!user) return;
+
+    const checkStatus = async () => {
+        try {
+            await checkSessionStatus(user.id);
+        } catch (e: any) {
+            // If request fails with "Forbidden" or explicit account suspension message
+            if (e.message.includes('إيقاف الحساب') || e.message.includes('Forbidden') || e.message.includes('403')) {
+                alert('تم إيقاف حسابك من قبل الإدارة. سيتم تسجيل الخروج.');
+                handleLogoutForce();
+            }
+        }
+    };
+
+    const statusInterval = setInterval(checkStatus, 5000);
+    return () => clearInterval(statusInterval);
+  }, [user]);
 
   const handleLoginSuccess = (u: User) => {
     setUser(u);
@@ -48,6 +69,12 @@ const App: React.FC = () => {
         setUser(null);
         setCurrentView(View.LOGIN);
     }
+  };
+
+  const handleLogoutForce = () => {
+      mockLogout();
+      setUser(null);
+      setCurrentView(View.LOGIN);
   };
 
   if (!user) return <Login onLoginSuccess={handleLoginSuccess} />;
