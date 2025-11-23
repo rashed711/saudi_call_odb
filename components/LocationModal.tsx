@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { ODBLocation, User } from '../types';
+import { ODBLocation, User, PermissionResource } from '../types';
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
-import { getLocationDetails } from '../services/mockBackend'; // Import the new service
+import { getLocationDetails } from '../services/mockBackend';
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -34,33 +33,37 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync internal state and fetch full details when data opens
   useEffect(() => {
     if (isOpen) {
-      setFormData(data); // Set initial data (might lack image)
+      setFormData(data);
       setIsZoomed(false);
       setIsSaving(false);
       
-      // LAZY LOADING STRATEGY:
-      // If we are in 'view' or 'edit' mode and we have an ID, fetch the full details (image)
       if (mode !== 'create' && data.id) {
           fetchDetails(data.id);
       }
     }
-  }, [isOpen, data]); // Re-run if data.id changes essentially
+  }, [isOpen, data]);
 
   const fetchDetails = async (id: number) => {
       setIsLoadingDetails(true);
       try {
-          // Fetch full data including image from backend
           const fullData = await getLocationDetails(id);
-          // Update state with full data, preserving any local edits if we were already editing? 
-          // Usually better to just overwrite with fresh data on open.
           setFormData(fullData);
       } catch (error) {
           console.error("Failed to load details:", error);
       } finally {
           setIsLoadingDetails(false);
+      }
+  };
+
+  // Helper to determine which permission resource to check based on current context
+  const getPermissionResource = (): PermissionResource => {
+      switch (context) {
+          case 'nearby': return 'nearby';
+          case 'map_filter': return 'map_filter';
+          case 'my_activity': return 'my_activity';
+          default: return 'odb';
       }
   };
 
@@ -78,11 +81,11 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
       const locationToSave: ODBLocation = {
         id: formData.id || 0,
-        ODB_ID: formData.ODB_ID,
-        CITYNAME: formData.CITYNAME,
+        ODB_ID: formData.ODB_ID!,
+        CITYNAME: formData.CITYNAME!,
         LATITUDE: Number(formData.LATITUDE),
         LONGITUDE: Number(formData.LONGITUDE),
-        image: formData.image, // Use the image from state (loaded or updated)
+        image: formData.image,
         notes: formData.notes,
         lastEditedBy: user.username,
         lastEditedAt: new Date().toISOString()
@@ -122,10 +125,9 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   // --- RENDER VIEW MODE ---
   const renderViewMode = () => (
     <div className="flex flex-col h-full bg-white md:rounded-2xl overflow-hidden">
-        {/* Header Image or Placeholder */}
+        {/* Header Image */}
         <div className="relative h-48 md:h-56 bg-gray-100 shrink-0 group cursor-pointer border-b border-gray-200" onClick={() => !isLoadingDetails && formData.image && setIsZoomed(true)}>
             {isLoadingDetails ? (
-                // LOADING SKELETON FOR IMAGE
                 <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 animate-pulse">
                      <Icons.Camera />
                      <span className="mt-2 text-xs font-bold text-gray-400">جاري تحميل الصورة...</span>
@@ -146,7 +148,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </div>
             )}
             
-            {/* Overlay Header */}
             <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 text-white pointer-events-none">
                 <div className="flex justify-between items-end">
                     <div>
@@ -163,10 +164,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             </button>
         </div>
 
-        {/* Content Body */}
         <div className="p-5 flex-1 overflow-y-auto space-y-5">
-            
-            {/* Coordinates */}
             <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 border border-gray-100 p-3 rounded-xl text-center">
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">خط العرض</label>
@@ -178,7 +176,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </div>
             </div>
 
-            {/* Notes */}
             <div>
                 <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
                     <Icons.Edit /> الملاحظات
@@ -195,7 +192,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 )}
             </div>
 
-            {/* Metadata */}
             <div className="border-t border-gray-100 pt-4 text-center">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-100">
                     <span className="text-[10px] text-gray-400">آخر تعديل:</span>
@@ -207,7 +203,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             </div>
         </div>
 
-        {/* Action Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-3">
             {(context === 'nearby' || context === 'map_filter') && (
                 <button onClick={handleGetDirections} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 transition-all active:scale-95">
@@ -223,7 +218,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </PermissionGuard>
             )}
 
-            <PermissionGuard user={user} resource={context === 'my_activity' ? 'my_activity' : 'odb'} action="edit">
+            <PermissionGuard user={user} resource={getPermissionResource()} action="edit">
                 <button 
                     onClick={onEdit} 
                     className={`flex-1 bg-primary hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all active:scale-95`}
@@ -257,7 +252,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </div>
             )}
             
-            {/* Basic Info */}
             <div className="space-y-4">
                 <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-500">اسم المدينة / الموقع <span className="text-red-500">*</span></label>
@@ -285,7 +279,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </div>
             </div>
 
-            {/* Coordinates */}
             <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
                 <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-500 uppercase">Lat (خط العرض)</label>
@@ -313,7 +306,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 </div>
             </div>
 
-            {/* Image Section */}
             <div>
                 <label className="text-xs font-bold text-gray-500 block mb-2">صورة الموقع</label>
                 {isLoadingDetails ? (
@@ -342,7 +334,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleImageUpload} />
             </div>
 
-            {/* Notes */}
             <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500">الملاحظات</label>
                 <textarea 
@@ -368,7 +359,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
   return (
     <>
-        {/* Main Modal Overlay */}
         <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
             <div className="relative w-full md:w-[500px] h-[90vh] md:h-auto md:max-h-[90vh] transition-transform animate-in slide-in-from-bottom-10 md:zoom-in-95">
@@ -376,7 +366,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             </div>
         </div>
 
-        {/* Zoomed Image Overlay */}
         {isZoomed && formData.image && (
             <div className="fixed inset-0 z-[90] bg-black flex items-center justify-center animate-in fade-in" onClick={() => setIsZoomed(false)}>
                 <img src={formData.image} className="max-w-full max-h-full object-contain p-2" />
