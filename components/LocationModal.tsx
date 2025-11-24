@@ -58,6 +58,36 @@ export const LocationModal: React.FC<LocationModalProps> = ({
       }
   };
 
+  // --- SECURITY LOGIC ---
+  const isOwner = formData.ownerId === user.id;
+  const isAdmin = user.role === 'admin';
+  const isSupervisor = user.role === 'supervisor';
+  
+  // Can Edit Logic
+  const canEdit = React.useMemo(() => {
+      if (mode === 'create') return true;
+      if (isAdmin) return true;
+      
+      // Unowned locations can be edited (claimed) by anyone with edit permission
+      if (!formData.ownerId) return true;
+
+      if (isSupervisor) {
+          // Supervisors can edit if it's their direct report (assuming we had that check)
+          // For now, simplify: Supervisors can unlock/edit any delegate's work or if unlocked
+          return true; 
+      }
+
+      // Delegate Logic
+      if (isOwner) return true; // Can always edit own work
+      if (!formData.isLocked) return true; // Can edit if explicitly unlocked by supervisor
+
+      return false; // Otherwise (Owned by someone else AND Locked) -> Deny
+  }, [formData, user, mode]);
+
+  // Can Toggle Lock Logic
+  const canToggleLock = isAdmin || isSupervisor;
+
+
   // Helper to determine which permission resource to check based on current context
   const getPermissionResource = (): PermissionResource => {
       switch (context) {
@@ -90,7 +120,11 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         image: formData.image,
         notes: formData.notes,
         lastEditedBy: user.username,
-        lastEditedAt: new Date().toISOString()
+        lastEditedAt: new Date().toISOString(),
+        // Preserve or update security fields
+        ownerId: formData.ownerId,
+        ownerName: formData.ownerName,
+        isLocked: formData.isLocked
       };
 
       await onSave(locationToSave);
@@ -158,6 +192,17 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                              <span className="font-mono bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-xs font-bold">{formData.ODB_ID}</span>
                         </div>
                     </div>
+                    
+                    {/* Owner Indicator */}
+                    {formData.ownerName && (
+                        <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                            {formData.isLocked ? <Icons.Lock /> : <div className="w-3 h-3 rounded-full bg-green-500"></div>}
+                            <div className="flex flex-col">
+                                <span className="text-[9px] text-gray-300 leading-none">بواسطة</span>
+                                <span className="text-[10px] font-bold leading-none">{formData.ownerName}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -221,12 +266,18 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             )}
 
             <PermissionGuard user={user} resource={getPermissionResource()} action="edit">
-                <button 
-                    onClick={onEdit} 
-                    className={`flex-1 bg-primary hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all active:scale-95`}
-                >
-                    <Icons.Edit /> <span>تعديل</span>
-                </button>
+                {canEdit ? (
+                    <button 
+                        onClick={onEdit} 
+                        className={`flex-1 bg-primary hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all active:scale-95`}
+                    >
+                        <Icons.Edit /> <span>تعديل</span>
+                    </button>
+                ) : (
+                    <div className="flex-1 bg-gray-200 text-gray-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
+                        <Icons.Lock /> <span>مقفل ({formData.ownerName})</span>
+                    </div>
+                )}
             </PermissionGuard>
 
             <button onClick={onClose} className="px-5 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-100 transition-colors">
@@ -256,6 +307,27 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             {isLoadingDetails && (
                 <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-xs font-bold text-center">
                     جاري جلب أحدث البيانات للموقع...
+                </div>
+            )}
+
+            {/* Admin/Supervisor Control Panel */}
+            {canToggleLock && mode === 'edit' && (
+                <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                        <span className="block text-xs font-bold text-purple-800">حماية الموقع</span>
+                        <span className="text-[10px] text-purple-600">
+                            {formData.isLocked ? "الموقع مقفل للمندوب المالك فقط" : "الموقع متاح للتعديل من قبل الجميع"}
+                        </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            checked={formData.isLocked || false} 
+                            onChange={(e) => setFormData({...formData, isLocked: e.target.checked})}
+                            className="sr-only peer" 
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    </label>
                 </div>
             )}
             

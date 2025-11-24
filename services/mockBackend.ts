@@ -241,6 +241,9 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
             LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
             lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
             lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+            ownerId: loc.ownerId ? Number(loc.ownerId) : null,
+            ownerName: loc.ownerName,
+            isLocked: loc.isLocked == 1 || loc.isLocked === true,
             image: undefined 
         }));
         return { data: mappedData, total: Number(result.total), totalPages: Number(result.totalPages) };
@@ -266,6 +269,9 @@ export const getAllLocationsForMap = async (): Promise<ODBLocation[]> => {
             CITYNAME: loc.CITYNAME || loc.city_name,
             LATITUDE: Number(loc.LATITUDE || loc.latitude),
             LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
+            ownerId: loc.ownerId ? Number(loc.ownerId) : null,
+            ownerName: loc.ownerName,
+            isLocked: loc.isLocked == 1 || loc.isLocked === true,
             image: undefined 
         }));
     } catch (e) {
@@ -289,6 +295,9 @@ export const getLocationDetails = async (id: number): Promise<ODBLocation> => {
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
         lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+        ownerId: loc.ownerId ? Number(loc.ownerId) : null,
+        ownerName: loc.ownerName,
+        isLocked: loc.isLocked == 1 || loc.isLocked === true,
         image: loc.image
     };
 };
@@ -305,6 +314,9 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
         LONGITUDE: Number(loc.LONGITUDE || loc.longitude),
         lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
         lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+        ownerId: loc.ownerId ? Number(loc.ownerId) : null,
+        ownerName: loc.ownerName,
+        isLocked: loc.isLocked == 1 || loc.isLocked === true,
         image: undefined 
     }));
     
@@ -341,6 +353,9 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
             distance: dist,
             lastEditedBy: loc.last_edited_by || loc.lastEditedBy,
             lastEditedAt: loc.last_edited_at || loc.lastEditedAt,
+            ownerId: loc.ownerId ? Number(loc.ownerId) : null,
+            ownerName: loc.ownerName,
+            isLocked: loc.isLocked == 1 || loc.isLocked === true,
             image: undefined 
         };
     });
@@ -356,11 +371,36 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
     return mappedLocations;
 };
 
+// Updated Save Function with Logic Logic
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
+    const userSession = getSession();
+    
+    // Logic for Ownership & Locking
+    let finalLocation = { ...location };
+
+    // Case 1: New Location -> Assign to current user and lock it
+    if (!finalLocation.id || finalLocation.id === 0) {
+        if (userSession) {
+            finalLocation.ownerId = userSession.id;
+            finalLocation.ownerName = userSession.name;
+        }
+        finalLocation.isLocked = true;
+    } 
+    // Case 2: Existing location without owner (Claiming) -> Assign and lock
+    else if (!finalLocation.ownerId && userSession && userSession.role === 'delegate') {
+        finalLocation.ownerId = userSession.id;
+        finalLocation.ownerName = userSession.name;
+        finalLocation.isLocked = true;
+    }
+
     const payload = {
-        ...location,
-        last_edited_by: location.lastEditedBy,
-        last_edited_at: location.lastEditedAt
+        ...finalLocation,
+        last_edited_by: finalLocation.lastEditedBy,
+        last_edited_at: finalLocation.lastEditedAt,
+        // Send these explicitly as snake_case if backend expects it, or just rely on spread
+        ownerId: finalLocation.ownerId,
+        ownerName: finalLocation.ownerName,
+        isLocked: finalLocation.isLocked
     };
     await apiRequest('save_location', 'POST', payload);
 };

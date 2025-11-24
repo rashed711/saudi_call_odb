@@ -29,6 +29,10 @@ export interface ODBLocation {
   notes?: string; 
   lastEditedBy?: string;
   lastEditedAt?: string;
+  // Security & Ownership Fields
+  ownerId?: number | null; // ID of the delegate/user who created/owns it
+  ownerName?: string;      // Name of the owner for display
+  isLocked?: boolean;      // If true, only owner/admin/supervisor can edit
 }
 
 export interface NearbyLocation extends ODBLocation {
