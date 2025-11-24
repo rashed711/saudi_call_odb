@@ -272,11 +272,11 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         onClick={onEdit} 
                         className={`flex-1 bg-primary hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all active:scale-95`}
                     >
-                        <Icons.Edit /> <span>تعديل</span>
+                        <Icons.Edit /> <span className="hidden md:inline">تعديل</span>
                     </button>
                 ) : (
                     <div className="flex-1 bg-gray-200 text-gray-400 py-3 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
-                        <Icons.Lock /> <span>مقفل ({formData.ownerName})</span>
+                        <Icons.Lock /> <span className="hidden md:inline">مقفل ({formData.ownerName})</span>
                     </div>
                 )}
             </PermissionGuard>

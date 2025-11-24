@@ -101,13 +101,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               ) : 'دخول للنظام'}
             </button>
           </form>
-
-          <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-            <p className="text-xs text-gray-400 mb-2 uppercase tracking-widest">بيانات تجريبية</p>
-            <div className="flex justify-center gap-4 text-sm text-gray-600 bg-gray-50 py-2 rounded-lg border border-gray-100">
-               <span><span className="font-bold text-primary">admin</span> / 123456</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
