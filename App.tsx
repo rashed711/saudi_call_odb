@@ -8,6 +8,7 @@ import SiteSettingsComponent from './components/SiteSettings';
 import UserManagement from './components/UserManagement';
 import MyActivity from './components/MyActivity';
 import MapFilter from './components/MapFilter';
+import SearchODB from './components/SearchODB';
 import { Icons } from './components/Icons';
 import { User, View } from './types';
 import { getSession, mockLogout, getSiteSettings, applySiteSettings, hasPermission, refreshUserSession } from './services/mockBackend';
@@ -113,6 +114,8 @@ const App: React.FC = () => {
     switch (currentView) {
       case View.SETTINGS_ODB: 
         return can('odb', 'view') ? <ODBTable user={user} /> : <AccessDenied />;
+      case View.SEARCH_ODB:
+        return can('search_odb', 'view') ? <SearchODB user={user} /> : <AccessDenied />;
       case View.NEARBY: 
         return can('nearby', 'view') ? <NearbyPlaces user={user} /> : <AccessDenied />;
       case View.MAP_FILTER:
@@ -129,6 +132,9 @@ const App: React.FC = () => {
       default:
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-4">
+            {can('search_odb', 'view') && (
+                <DashboardCard onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} color="blue" title="استعلام ODB" desc="بحث سريع بالكود" />
+            )}
             {can('odb', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} color="blue" title="إدارة المواقع" desc="السجل العام" />
             )}
@@ -136,7 +142,7 @@ const App: React.FC = () => {
                 <DashboardCard onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} color="purple" title="الأماكن القريبة" desc="الخريطة" />
             )}
             {can('map_filter', 'view') && (
-                <DashboardCard onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} color="green" title="فلترة الخريطة" desc="بحث بالنطاق الجغرافي" />
+                <DashboardCard onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} color="green" title="الأماكن القريبة (خريطة)" desc="بحث بالنطاق الجغرافي" />
             )}
             {can('my_activity', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} color="orange" title="نشاطي" desc="المواقع التي أضفتها" />
@@ -164,13 +170,15 @@ const App: React.FC = () => {
           <SidebarItem active={currentView === View.DASHBOARD} onClick={() => setCurrentView(View.DASHBOARD)} icon={<Icons.Dashboard />} text="الرئيسية" />
           
           <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">العمليات</div>
-          {can('odb', 'view') && <SidebarItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} text="كل المواقع" />}
-          {can('map_filter', 'view') && <SidebarItem active={currentView === View.MAP_FILTER} onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} text="فلترة الخريطة" />}
-          {can('my_activity', 'view') && <SidebarItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} text="نشاطي" />}
+          {can('search_odb', 'view') && <SidebarItem active={currentView === View.SEARCH_ODB} onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} text="استعلام ODB" />}
+          {can('map_filter', 'view') && <SidebarItem active={currentView === View.MAP_FILTER} onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} text="الأماكن القريبة (خريطة)" />}
           {can('nearby', 'view') && <SidebarItem active={currentView === View.NEARBY} onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} text="الأماكن القريبة" />}
+          {can('my_activity', 'view') && <SidebarItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} text="نشاطي" />}
+          
           
           {(can('users', 'view') || can('settings', 'view')) && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">الإدارة</div>}
           {can('users', 'view') && <SidebarItem active={currentView === View.USERS} onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} text="المستخدمين" />}
+          {can('odb', 'view') && <SidebarItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} text="كل مواقع ODB" />}
           {can('settings', 'view') && <SidebarItem active={currentView === View.SETTINGS_SITE} onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Settings />} text="إعدادات الموقع" />}
           
           <SidebarItem active={currentView === View.PROFILE} onClick={() => setCurrentView(View.PROFILE)} icon={<Icons.User />} text="حسابي" />
@@ -192,7 +200,8 @@ const App: React.FC = () => {
             <div className="hidden md:block text-xl font-bold text-gray-800">
                 {currentView === View.DASHBOARD && 'لوحة التحكم'}
                 {currentView === View.SETTINGS_ODB && 'سجل المواقع المركزي'}
-                {currentView === View.MAP_FILTER && 'فلترة الخريطة (Bounding Box)'}
+                {currentView === View.SEARCH_ODB && 'بحث ODB سريع'}
+                {currentView === View.MAP_FILTER && 'الأماكن القريبة (خريطة) (Bounding Box)'}
                 {currentView === View.MY_ACTIVITY && 'سجل نشاطي'}
                 {currentView === View.USERS && 'إدارة الصلاحيات'}
                 {currentView === View.SETTINGS_SITE && 'إعدادات الموقع'}
@@ -212,7 +221,9 @@ const App: React.FC = () => {
         {/* Mobile Bottom Nav */}
         <nav className="md:hidden shrink-0 h-[calc(4rem+env(safe-area-inset-bottom))] bg-white border-t border-gray-200 flex justify-around items-start pt-1 px-2 z-30 shadow-up pb-[env(safe-area-inset-bottom)]">
             <MobileNavItem active={currentView === View.DASHBOARD} onClick={() => setCurrentView(View.DASHBOARD)} icon={<Icons.Dashboard />} label="الرئيسية" />
-            {can('odb', 'view') && <MobileNavItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} label="القائمة" />}
+            
+            {can('search_odb', 'view') && <MobileNavItem active={currentView === View.SEARCH_ODB} onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} label="بحث" />}
+            
             {can('map_filter', 'view') && (
                 <div className="-mt-6">
                     <button onClick={() => setCurrentView(View.MAP_FILTER)} className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${currentView === View.MAP_FILTER ? 'bg-primary text-white' : 'bg-secondary text-white'}`}>

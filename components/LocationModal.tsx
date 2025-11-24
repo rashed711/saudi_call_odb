@@ -205,7 +205,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         </div>
 
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-3">
-            {(context === 'nearby' || context === 'map_filter') && (
+            {(context === 'nearby' || context === 'map_filter' || context === 'my_activity') && (
                 <button onClick={handleGetDirections} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 transition-all active:scale-95">
                     <Icons.Navigation /> <span>اذهب للموقع</span>
                 </button>
@@ -236,7 +236,12 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   );
 
   // --- RENDER EDIT/CREATE MODE ---
-  const renderEditMode = () => (
+  const renderEditMode = () => {
+    // Logic: If context is anything OTHER than 'default' (e.g. 'nearby', 'my_activity'), 
+    // AND we are in 'edit' mode, we lock the core fields (City, ID, Lat, Lng).
+    const isCoreLocked = mode === 'edit' && context !== 'default';
+
+    return (
     <div className="flex flex-col h-full bg-white md:rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -256,31 +261,37 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             <div className="space-y-4">
                 <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-500">اسم المدينة / الموقع <span className="text-red-500">*</span></label>
-                    <input 
-                        type="text" 
-                        required 
-                        value={formData.CITYNAME || ''} 
-                        onChange={e => setFormData({...formData, CITYNAME: e.target.value})}
-                        className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
-                        placeholder="أدخل اسم الموقع"
-                        disabled={isLoadingDetails}
-                    />
+                    <div className="relative">
+                        {isCoreLocked && <div className="absolute left-3 top-3 text-gray-400"><Icons.Lock /></div>}
+                        <input 
+                            type="text" 
+                            required 
+                            value={formData.CITYNAME || ''} 
+                            onChange={e => setFormData({...formData, CITYNAME: e.target.value})}
+                            className={`w-full p-3 border rounded-xl outline-none transition-all ${isCoreLocked ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed pl-10' : 'border-gray-200 focus:ring-2 focus:ring-primary focus:border-primary'}`}
+                            placeholder="أدخل اسم الموقع"
+                            disabled={isLoadingDetails || isCoreLocked}
+                        />
+                    </div>
                 </div>
                 <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-500">كود ODB <span className="text-red-500">*</span></label>
-                    <input 
-                        type="text" 
-                        required 
-                        value={formData.ODB_ID || ''} 
-                        onChange={e => setFormData({...formData, ODB_ID: e.target.value})}
-                        className="w-full p-3 border border-gray-200 rounded-xl font-mono focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
-                        placeholder="ODB-XXXX"
-                        disabled={isLoadingDetails}
-                    />
+                    <div className="relative">
+                        {isCoreLocked && <div className="absolute left-3 top-3 text-gray-400"><Icons.Lock /></div>}
+                        <input 
+                            type="text" 
+                            required 
+                            value={formData.ODB_ID || ''} 
+                            onChange={e => setFormData({...formData, ODB_ID: e.target.value})}
+                            className={`w-full p-3 border rounded-xl font-mono outline-none transition-all ${isCoreLocked ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed pl-10' : 'border-gray-200 focus:ring-2 focus:ring-primary focus:border-primary'}`}
+                            placeholder="ODB-XXXX"
+                            disabled={isLoadingDetails || isCoreLocked}
+                        />
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <div className={`grid grid-cols-2 gap-3 p-4 rounded-xl border ${isCoreLocked ? 'bg-gray-100 border-gray-200' : 'bg-gray-50 border-gray-100'}`}>
                 <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-500 uppercase">Lat (خط العرض)</label>
                     <input 
@@ -289,8 +300,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         required 
                         value={formData.LATITUDE || ''} 
                         onChange={e => setFormData({...formData, LATITUDE: parseFloat(e.target.value)})}
-                        className="w-full p-2 border border-gray-200 rounded-lg text-sm text-center font-mono focus:ring-2 focus:ring-primary outline-none"
-                        disabled={isLoadingDetails}
+                        className={`w-full p-2 border rounded-lg text-sm text-center font-mono outline-none ${isCoreLocked ? 'bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed' : 'border-gray-200 focus:ring-2 focus:ring-primary'}`}
+                        disabled={isLoadingDetails || isCoreLocked}
                     />
                 </div>
                 <div className="space-y-1">
@@ -301,8 +312,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                         required 
                         value={formData.LONGITUDE || ''} 
                         onChange={e => setFormData({...formData, LONGITUDE: parseFloat(e.target.value)})}
-                        className="w-full p-2 border border-gray-200 rounded-lg text-sm text-center font-mono focus:ring-2 focus:ring-primary outline-none"
-                        disabled={isLoadingDetails}
+                        className={`w-full p-2 border rounded-lg text-sm text-center font-mono outline-none ${isCoreLocked ? 'bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed' : 'border-gray-200 focus:ring-2 focus:ring-primary'}`}
+                        disabled={isLoadingDetails || isCoreLocked}
                     />
                 </div>
             </div>
@@ -356,7 +367,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
             </button>
         </div>
     </div>
-  );
+    );
+  };
 
   return (
     <>

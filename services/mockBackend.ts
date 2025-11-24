@@ -12,7 +12,8 @@ const ADMIN_PERMISSIONS: Permission[] = [
     { resource: 'users', actions: ['view', 'create', 'edit', 'delete'] },
     { resource: 'settings', actions: ['view', 'edit'] },
     { resource: 'my_activity', actions: ['view'] },
-    { resource: 'map_filter', actions: ['view'] }
+    { resource: 'map_filter', actions: ['view'] },
+    { resource: 'search_odb', actions: ['view'] }
 ];
 
 const SUPERVISOR_PERMISSIONS: Permission[] = [
@@ -21,7 +22,8 @@ const SUPERVISOR_PERMISSIONS: Permission[] = [
     { resource: 'nearby', actions: ['view'] },
     { resource: 'users', actions: ['view', 'create', 'edit'] }, // Manage their delegates only
     { resource: 'my_activity', actions: ['view'] },
-    { resource: 'map_filter', actions: ['view'] }
+    { resource: 'map_filter', actions: ['view'] },
+    { resource: 'search_odb', actions: ['view'] }
 ];
 
 const DELEGATE_PERMISSIONS: Permission[] = [
@@ -29,7 +31,8 @@ const DELEGATE_PERMISSIONS: Permission[] = [
     { resource: 'odb', actions: ['view'] }, // View only global list
     { resource: 'nearby', actions: ['view'] },
     { resource: 'my_activity', actions: ['view', 'edit'] }, // Can edit their own work
-    { resource: 'map_filter', actions: ['view'] }
+    { resource: 'map_filter', actions: ['view'] },
+    { resource: 'search_odb', actions: ['view'] }
 ];
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -244,6 +247,13 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
     } catch (e: any) {
         throw e;
     }
+};
+
+// Specialized Search Function (Optimized for single result)
+export const searchODBLocation = async (query: string): Promise<ODBLocation[]> => {
+    // We reuse the paginated endpoint but limit to 5 results to keep it fast
+    const result = await getODBLocationsPaginated(1, 5, query);
+    return result.data;
 };
 
 export const getAllLocationsForMap = async (): Promise<ODBLocation[]> => {

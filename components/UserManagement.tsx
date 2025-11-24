@@ -6,9 +6,10 @@ import { Icons } from './Icons';
 
 const RESOURCES: { id: PermissionResource; label: string }[] = [
   { id: 'dashboard', label: 'لوحة التحكم' },
-  { id: 'odb', label: 'مواقع ODB' },
+  { id: 'search_odb', label: 'استعلام ODB (سريع)' },
+  { id: 'odb', label: 'مواقع ODB (السجل الكامل)' },
   { id: 'nearby', label: 'الأماكن القريبة' },
-  { id: 'map_filter', label: 'فلترة الخريطة' },
+  { id: 'map_filter', label: 'الأماكن القريبة (خريطة)' },
   { id: 'users', label: 'المستخدمين' },
   { id: 'settings', label: 'الإعدادات' },
   { id: 'my_activity', label: 'نشاطي (للمناديب)' },
@@ -80,6 +81,7 @@ const UserManagement: React.FC = () => {
       } else if (newRole === 'supervisor') {
           defaults = [
               { resource: 'dashboard', actions: ['view'] },
+              { resource: 'search_odb', actions: ['view'] },
               { resource: 'odb', actions: ['view', 'create', 'edit'] },
               { resource: 'nearby', actions: ['view'] },
               { resource: 'map_filter', actions: ['view'] },
@@ -89,6 +91,7 @@ const UserManagement: React.FC = () => {
       } else { 
           defaults = [
               { resource: 'dashboard', actions: ['view'] },
+              { resource: 'search_odb', actions: ['view'] },
               { resource: 'odb', actions: ['view'] },
               { resource: 'nearby', actions: ['view'] },
               { resource: 'map_filter', actions: ['view'] },
@@ -283,7 +286,9 @@ const UserManagement: React.FC = () => {
                                          <td className="p-2 text-right font-bold text-gray-700 bg-gray-50/50">{res.label}</td>
                                          {ACTIONS.map(act => {
                                              if (res.id === 'dashboard' && act.id !== 'view') return <td key={act.id}></td>;
-                                             // For Map Filter, maybe only View is relevant, but we show all for consistency or allow create/edit if backend supports
+                                             // For Search ODB, only View is relevant
+                                             if (res.id === 'search_odb' && act.id !== 'view') return <td key={act.id}></td>;
+
                                              const checked = isPermitted(res.id, act.id);
                                              const disabled = isPermissionDisabled(res.id, act.id);
                                              return (

@@ -1,5 +1,5 @@
 
-export type PermissionResource = 'dashboard' | 'odb' | 'nearby' | 'users' | 'settings' | 'my_activity' | 'map_filter';
+export type PermissionResource = 'dashboard' | 'odb' | 'nearby' | 'users' | 'settings' | 'my_activity' | 'map_filter' | 'search_odb';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'export';
 
 export interface Permission {
@@ -53,5 +53,6 @@ export enum View {
   PROFILE = 'PROFILE',
   NEARBY = 'NEARBY',
   MY_ACTIVITY = 'MY_ACTIVITY',
-  MAP_FILTER = 'MAP_FILTER' // New View
+  MAP_FILTER = 'MAP_FILTER',
+  SEARCH_ODB = 'SEARCH_ODB' // New View
 }
