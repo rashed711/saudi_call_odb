@@ -57,11 +57,22 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
 
       if (mapRef.current) return;
 
-      const map = L.map('map-container', { zoomControl: false }).setView([26.8206, 30.8025], 6); // Default Center Egypt
+      // 1. Initialize Map with Mobile Optimizations
+      const map = L.map('map-container', { 
+          zoomControl: false,
+          tap: false, // Fix for some touch devices
+          preferCanvas: true // Use Canvas rendering for better performance with many markers
+      }).setView([26.8206, 30.8025], 6); 
       
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
-          maxZoom: 19
+      // 2. Use CartoDB Voyager Tiles (Much faster & Mobile friendly than OSM default)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          subdomains: 'abcd',
+          maxZoom: 20,
+          // Performance settings
+          updateWhenIdle: false, // Load tiles while panning (smoother visual)
+          keepBuffer: 10,        // Keep 10 screens worth of tiles in memory (prevents grey areas on pan)
+          edgeBufferTiles: 2     // Load tiles slightly outside viewport
       }).addTo(map);
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -70,6 +81,12 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
       markersLayerRef.current = L.featureGroup().addTo(map);
 
       mapRef.current = map;
+
+      // 3. Fix: Invalid Size Issue (Grey Map)
+      // Force map to recalculate size after render to ensure full coverage
+      setTimeout(() => {
+          map.invalidateSize();
+      }, 200);
 
       // Drawing Logic
       let startLatLng: any = null;
@@ -106,6 +123,11 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
           map.isDrawingEnabled = false;
           map.getContainer().style.cursor = '';
           setViewMode('area'); // Switch mode to Area
+      });
+      
+      // Handle Window Resize (Mobile keyboard / Address bar)
+      window.addEventListener('resize', () => {
+          if(mapRef.current) mapRef.current.invalidateSize();
       });
   };
 
