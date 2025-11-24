@@ -11,7 +11,7 @@ interface LocationModalProps {
   mode: 'view' | 'edit' | 'create';
   data: Partial<ODBLocation>;
   user: User;
-  context: 'default' | 'nearby' | 'my_activity' | 'map_filter';
+  context: 'default' | 'nearby' | 'my_activity' | 'map_filter' | 'search_odb';
   onSave: (data: ODBLocation) => Promise<void>;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -64,6 +64,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
           case 'nearby': return 'nearby';
           case 'map_filter': return 'map_filter';
           case 'my_activity': return 'my_activity';
+          case 'search_odb': return 'search_odb';
           default: return 'odb';
       }
   };
@@ -205,7 +206,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         </div>
 
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-3">
-            {(context === 'nearby' || context === 'map_filter' || context === 'my_activity') && (
+            {(context === 'nearby' || context === 'map_filter' || context === 'my_activity' || context === 'search_odb') && (
                 <button onClick={handleGetDirections} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 transition-all active:scale-95">
                     <Icons.Navigation /> <span>اذهب للموقع</span>
                 </button>
@@ -237,7 +238,7 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
   // --- RENDER EDIT/CREATE MODE ---
   const renderEditMode = () => {
-    // Logic: If context is anything OTHER than 'default' (e.g. 'nearby', 'my_activity'), 
+    // Logic: If context is anything OTHER than 'default' (e.g. 'nearby', 'my_activity', 'search_odb'), 
     // AND we are in 'edit' mode, we lock the core fields (City, ID, Lat, Lng).
     const isCoreLocked = mode === 'edit' && context !== 'default';
 

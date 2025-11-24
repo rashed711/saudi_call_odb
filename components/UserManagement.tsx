@@ -286,8 +286,9 @@ const UserManagement: React.FC = () => {
                                          <td className="p-2 text-right font-bold text-gray-700 bg-gray-50/50">{res.label}</td>
                                          {ACTIONS.map(act => {
                                              if (res.id === 'dashboard' && act.id !== 'view') return <td key={act.id}></td>;
-                                             // For Search ODB, only View is relevant
-                                             if (res.id === 'search_odb' && act.id !== 'view') return <td key={act.id}></td>;
+                                             
+                                             // UPDATE: Allow both view and edit for Search ODB
+                                             if (res.id === 'search_odb' && !['view', 'edit'].includes(act.id)) return <td key={act.id}></td>;
 
                                              const checked = isPermitted(res.id, act.id);
                                              const disabled = isPermissionDisabled(res.id, act.id);

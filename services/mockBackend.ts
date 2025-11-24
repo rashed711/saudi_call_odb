@@ -13,7 +13,7 @@ const ADMIN_PERMISSIONS: Permission[] = [
     { resource: 'settings', actions: ['view', 'edit'] },
     { resource: 'my_activity', actions: ['view'] },
     { resource: 'map_filter', actions: ['view'] },
-    { resource: 'search_odb', actions: ['view'] }
+    { resource: 'search_odb', actions: ['view', 'edit'] } // Added edit here
 ];
 
 const SUPERVISOR_PERMISSIONS: Permission[] = [

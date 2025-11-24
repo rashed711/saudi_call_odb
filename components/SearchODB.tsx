@@ -146,7 +146,7 @@ const SearchODB: React.FC<Props> = ({ user }) => {
                 mode={modalMode}
                 data={selectedLocation}
                 user={user}
-                context="default" // Use default context to allow read-only based on regular permissions or customized if needed
+                context="search_odb"
                 onSave={handleSave}
                 onEdit={() => setModalMode('edit')}
             />
