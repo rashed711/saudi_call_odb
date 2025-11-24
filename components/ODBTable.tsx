@@ -5,6 +5,7 @@ import { getODBLocationsPaginated, saveODBLocation, deleteODBLocation, saveBulkO
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
 import { LocationModal } from './LocationModal';
+import { CopyableText } from './CopyableText';
 
 interface ODBTableProps {
     user: User;
@@ -243,11 +244,12 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
                 <tr key={loc.id} onClick={() => handleRowClick(loc)} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${selectedIds.includes(loc.id) ? 'bg-blue-50' : ''}`}>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(loc.id)} onChange={(e) => { e.stopPropagation(); handleSelectRow(loc.id); }} /></td>
                     <td className="py-3 px-4 font-medium flex items-center gap-2">
-                        {/* Always use icon, never assume image is present in list */}
                         <div className="text-gray-400"><Icons.MapPin /></div>
                         {loc.CITYNAME}
                     </td>
-                    <td className="py-3 px-4 text-blue-600 font-mono text-sm">{loc.ODB_ID}</td>
+                    <td className="py-3 px-4">
+                        <CopyableText text={loc.ODB_ID} className="text-blue-600 font-mono text-sm hover:bg-blue-50 px-2 py-0.5 rounded" />
+                    </td>
                 </tr>
             ))}
           </tbody>
@@ -263,7 +265,7 @@ const ODBTable: React.FC<ODBTableProps> = ({ user }) => {
                          <span className="text-gray-400"><Icons.MapPin /></span>
                          {loc.CITYNAME}
                     </h3>
-                    <span className="text-xs bg-gray-100 px-2 rounded h-fit py-0.5">{loc.ODB_ID}</span>
+                    <CopyableText text={loc.ODB_ID} className="text-xs bg-gray-100 px-2 rounded h-fit py-0.5 font-mono" />
                 </div>
                 <div className="mt-3 flex justify-between items-center border-t pt-2">
                      <div className="text-[10px] text-gray-400">

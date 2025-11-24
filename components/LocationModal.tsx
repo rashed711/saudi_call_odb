@@ -4,6 +4,7 @@ import { ODBLocation, User, PermissionResource } from '../types';
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
 import { getLocationDetails } from '../services/mockBackend';
+import { CopyableText } from './CopyableText';
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -188,8 +189,8 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 <div className="flex justify-between items-end">
                     <div>
                         <h2 className="text-xl md:text-2xl font-bold leading-none shadow-black drop-shadow-md">{formData.CITYNAME}</h2>
-                        <div className="flex items-center gap-2 mt-1">
-                             <span className="font-mono bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-xs font-bold">{formData.ODB_ID}</span>
+                        <div className="flex items-center gap-2 mt-1 pointer-events-auto">
+                             <CopyableText text={formData.ODB_ID || ''} className="font-mono bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-xs font-bold hover:bg-white/30 text-white" />
                         </div>
                     </div>
                     

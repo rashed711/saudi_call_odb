@@ -4,6 +4,7 @@ import { ODBLocation, NearbyLocation, User, SiteSettings } from '../types';
 import { getNearbyLocationsAPI, saveODBLocation, getSiteSettings } from '../services/mockBackend';
 import { Icons } from './Icons';
 import { LocationModal } from './LocationModal';
+import { CopyableText } from './CopyableText';
 
 interface NearbyPlacesProps {
   user: User;
@@ -230,7 +231,9 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                                 {place.CITYNAME}
                             </td>
                             <td className="py-3 px-4 text-sm font-bold text-green-600">{place.distance.toFixed(2)} كم</td>
-                            <td className="py-3 px-4 text-blue-600 font-mono text-sm">{place.ODB_ID}</td>
+                            <td className="py-3 px-4">
+                                <CopyableText text={place.ODB_ID} className="text-blue-600 font-mono text-sm hover:bg-blue-50 px-2 py-0.5 rounded" />
+                            </td>
                             <td className="py-3 px-4 text-center flex justify-center gap-2">
                                 <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="p-1.5 text-gray-400 hover:text-blue-600" title="اتجاهات"><Icons.Navigation /></button>
                                 <button onClick={(e) => handleEditClick(e, place)} className="p-1.5 text-gray-400 hover:text-purple-600" title="تعديل"><Icons.Edit /></button>
@@ -253,7 +256,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-start">
                                     <h3 className="font-bold text-sm text-gray-900 truncate">{place.CITYNAME}</h3>
-                                    <span className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{place.ODB_ID}</span>
+                                    <CopyableText text={place.ODB_ID} className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded" />
                                 </div>
                                 <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-400">
                                     <Icons.Navigation />

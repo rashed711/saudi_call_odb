@@ -4,6 +4,7 @@ import { User, ODBLocation } from '../types';
 import { searchODBLocation, saveODBLocation } from '../services/mockBackend';
 import { Icons } from './Icons';
 import { LocationModal } from './LocationModal';
+import { CopyableText } from './CopyableText';
 
 interface Props {
     user: User;
@@ -114,7 +115,9 @@ const SearchODB: React.FC<Props> = ({ user }) => {
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-bold text-gray-800 truncate">{loc.CITYNAME}</div>
-                                                        <div className="text-xs text-gray-500 font-mono mt-0.5 bg-gray-100 inline-block px-1.5 rounded">{loc.ODB_ID}</div>
+                                                        <div className="mt-1">
+                                                            <CopyableText text={loc.ODB_ID} className="text-xs text-gray-500 font-mono bg-gray-100 px-1.5 rounded hover:bg-blue-100 hover:text-blue-700" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="text-gray-300 group-hover:text-primary transition-colors">

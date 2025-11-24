@@ -5,6 +5,7 @@ import { getMyActivity, saveODBLocation } from '../services/mockBackend';
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
 import { LocationModal } from './LocationModal';
+import { CopyableText } from './CopyableText';
 
 interface Props {
     user: User;
@@ -103,12 +104,16 @@ const MyActivity: React.FC<Props> = ({ user }) => {
                                             <div className="text-gray-400"><Icons.MapPin /></div>
                                             {loc.CITYNAME}
                                         </div>
-                                        <div className="md:hidden text-xs text-blue-600 font-mono mt-1">{loc.ODB_ID}</div>
+                                        <div className="md:hidden mt-1">
+                                            <CopyableText text={loc.ODB_ID} className="text-xs text-blue-600 font-mono" />
+                                        </div>
                                         <div className="text-[10px] text-gray-400 mt-1" dir="ltr">
                                             {loc.lastEditedAt ? loc.lastEditedAt.split('T')[0] : 'N/A'}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 md:px-6 font-mono text-blue-600 hidden md:table-cell">{loc.ODB_ID}</td>
+                                    <td className="px-4 py-3 md:px-6 hidden md:table-cell">
+                                        <CopyableText text={loc.ODB_ID} className="font-mono text-blue-600 hover:bg-blue-50 px-2 py-0.5 rounded" />
+                                    </td>
                                     <td className="px-4 py-3 md:px-6 text-center">
                                         <PermissionGuard 
                                             user={user} 

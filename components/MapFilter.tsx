@@ -4,6 +4,7 @@ import { getAllLocationsForMap, saveODBLocation, getSiteSettings, getNearbyLocat
 import { ODBLocation, User, SiteSettings } from '../types';
 import { Icons } from './Icons';
 import { LocationModal } from './LocationModal';
+import { CopyableText } from './CopyableText';
 
 interface MapFilterProps {
   user: User;
@@ -420,7 +421,9 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                                                 </span>
                                             ) : '-'}
                                         </td>
-                                        <td className="px-4 py-3 font-mono text-blue-600 text-xs">{loc.ODB_ID}</td>
+                                        <td className="px-4 py-3">
+                                            <CopyableText text={loc.ODB_ID} className="text-blue-600 font-mono text-xs hover:bg-blue-50 px-2 py-0.5 rounded" />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <button onClick={(e) => handleEditClick(e, loc)} className="p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <Icons.Edit />
@@ -446,7 +449,7 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                                     <div className="min-w-0 flex-1">
                                         <div className="flex justify-between items-start">
                                             <h4 className="font-bold text-gray-900 truncate text-sm">{loc.CITYNAME}</h4>
-                                            <span className="text-[10px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{loc.ODB_ID}</span>
+                                            <CopyableText text={loc.ODB_ID} className="text-[10px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded" />
                                         </div>
                                         <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">
                                             <span className="dir-ltr">{loc.LATITUDE.toFixed(4)}, {loc.LONGITUDE.toFixed(4)}</span>
