@@ -36,8 +36,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         <div className="bg-gradient-to-br from-primary to-blue-800 p-10 text-center relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full bg-white/10 backdrop-blur-sm transform -skew-y-6 scale-150 origin-top-left opacity-20"></div>
           <div className="relative z-10">
-             <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">تسجيل الدخول</h1>
-             <p className="text-blue-100 text-sm font-medium opacity-90">نظام إدارة ODB المتكامل</p>
+             <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">سعودي كول ODB</h1>
+             <p className="text-blue-100 text-sm font-medium opacity-90">تسجيل الدخول</p>
           </div>
         </div>
         

@@ -125,7 +125,7 @@ const App: React.FC = () => {
       case View.DASHBOARD:
       default:
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 pb-4">
             {can('map_filter', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} color="green" title="خريطة الأماكن" desc="بحث بالنطاق الجغرافي" />
             )}
@@ -303,9 +303,14 @@ const AccessDenied = () => (
 const DashboardCard = ({ onClick, icon, title, desc, color }: any) => {
     const colors: any = { blue: 'bg-blue-100 text-blue-600', purple: 'bg-purple-100 text-purple-600', green: 'bg-green-100 text-green-600', gray: 'bg-gray-100 text-gray-600', orange: 'bg-orange-100 text-orange-600' };
     return (
-        <div onClick={onClick} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-all flex items-center gap-4 hover:border-blue-200">
-            <div className={`w-14 h-14 ${colors[color]} rounded-2xl flex items-center justify-center shadow-sm`}>{icon}</div>
-            <div><h3 className="text-lg font-bold text-gray-800">{title}</h3><p className="text-gray-500 text-xs">{desc}</p></div>
+        <div onClick={onClick} className="cursor-pointer bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-100 active:scale-[0.98] transition-all flex flex-col md:flex-row items-center gap-3 md:gap-4 hover:border-blue-200 h-full">
+            <div className={`w-12 h-12 md:w-14 md:h-14 ${colors[color]} rounded-2xl flex items-center justify-center shadow-sm shrink-0`}>
+                {icon}
+            </div>
+            <div className="text-center md:text-right">
+                <h3 className="text-sm md:text-lg font-bold text-gray-800 leading-tight">{title}</h3>
+                <p className="text-gray-500 text-[10px] md:text-xs mt-1 md:mt-0 line-clamp-2 md:line-clamp-none leading-snug">{desc}</p>
+            </div>
         </div>
     );
 };
