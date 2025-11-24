@@ -36,7 +36,6 @@ const App: React.FC = () => {
   }, []);
 
   // 2. Security Heartbeat & Real-Time Permissions Sync
-  // Check if user is active and update permissions every 5 seconds
   useEffect(() => {
     if (!user) return;
 
@@ -54,23 +53,16 @@ const App: React.FC = () => {
                 }
 
                 // Check for Permission/Role changes
-                // We compare the stringified permissions array to detect deep changes
                 const permsChanged = JSON.stringify(freshUser.permissions) !== JSON.stringify(user.permissions);
                 const roleChanged = freshUser.role !== user.role;
                 
                 if (permsChanged || roleChanged) {
                     console.log("Permissions updated remotely");
-                    // Update state to reflect changes in UI immediately
                     setUser(freshUser);
-                    // Update localStorage so changes persist on reload
                     localStorage.setItem('odb_user_session_v3_perm', JSON.stringify(freshUser));
                 }
-            } else {
-                 // If user not found (deleted?), logout
-                 // handleLogoutForce(); // Optional: might be too aggressive if just network error
             }
         } catch (e: any) {
-            // Only force logout on specific auth errors, not network errors
             if (e.message && (e.message.includes('Forbidden') || e.message.includes('403'))) {
                 handleLogoutForce();
             }
@@ -83,8 +75,10 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (u: User) => {
     setUser(u);
-    // Check if user is a delegate and has permission for nearby, if so, redirect there
-    if (u.role === 'delegate' && hasPermission(u, 'nearby', 'view')) {
+    // Redirect logic: Priority to Map Filter as requested
+    if (hasPermission(u, 'map_filter', 'view')) {
+      setCurrentView(View.MAP_FILTER);
+    } else if (hasPermission(u, 'nearby', 'view')) {
       setCurrentView(View.NEARBY);
     } else {
       setCurrentView(View.DASHBOARD);
@@ -132,17 +126,17 @@ const App: React.FC = () => {
       default:
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-4">
+            {can('map_filter', 'view') && (
+                <DashboardCard onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} color="green" title="خريطة الأماكن" desc="بحث بالنطاق الجغرافي" />
+            )}
             {can('search_odb', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} color="blue" title="استعلام ODB" desc="بحث سريع بالكود" />
             )}
+            {can('nearby', 'view') && (
+                <DashboardCard onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} color="purple" title="الأماكن القريبة" desc="قائمة المواقع" />
+            )}
             {can('odb', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} color="blue" title="إدارة المواقع" desc="السجل العام" />
-            )}
-            {can('nearby', 'view') && (
-                <DashboardCard onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} color="purple" title="الأماكن القريبة" desc="الخريطة" />
-            )}
-            {can('map_filter', 'view') && (
-                <DashboardCard onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} color="green" title="الأماكن القريبة (خريطة)" desc="بحث بالنطاق الجغرافي" />
             )}
             {can('my_activity', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} color="orange" title="نشاطي" desc="المواقع التي أضفتها" />
@@ -170,11 +164,10 @@ const App: React.FC = () => {
           <SidebarItem active={currentView === View.DASHBOARD} onClick={() => setCurrentView(View.DASHBOARD)} icon={<Icons.Dashboard />} text="الرئيسية" />
           
           <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">العمليات</div>
+          {can('map_filter', 'view') && <SidebarItem active={currentView === View.MAP_FILTER} onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} text="الخريطة" />}
           {can('search_odb', 'view') && <SidebarItem active={currentView === View.SEARCH_ODB} onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} text="استعلام ODB" />}
-          {can('map_filter', 'view') && <SidebarItem active={currentView === View.MAP_FILTER} onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} text="الأماكن القريبة (خريطة)" />}
-          {can('nearby', 'view') && <SidebarItem active={currentView === View.NEARBY} onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} text="الأماكن القريبة" />}
+          {can('nearby', 'view') && <SidebarItem active={currentView === View.NEARBY} onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} text="الأماكن القريبة (قائمة)" />}
           {can('my_activity', 'view') && <SidebarItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} text="نشاطي" />}
-          
           
           {(can('users', 'view') || can('settings', 'view')) && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">الإدارة</div>}
           {can('users', 'view') && <SidebarItem active={currentView === View.USERS} onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} text="المستخدمين" />}
@@ -201,7 +194,7 @@ const App: React.FC = () => {
                 {currentView === View.DASHBOARD && 'لوحة التحكم'}
                 {currentView === View.SETTINGS_ODB && 'سجل المواقع المركزي'}
                 {currentView === View.SEARCH_ODB && 'بحث ODB سريع'}
-                {currentView === View.MAP_FILTER && 'الأماكن القريبة (خريطة) (Bounding Box)'}
+                {currentView === View.MAP_FILTER && 'خريطة الأماكن (بحث جغرافي)'}
                 {currentView === View.MY_ACTIVITY && 'سجل نشاطي'}
                 {currentView === View.USERS && 'إدارة الصلاحيات'}
                 {currentView === View.SETTINGS_SITE && 'إعدادات الموقع'}
@@ -218,73 +211,81 @@ const App: React.FC = () => {
             {renderContent()}
         </div>
 
-        {/* Mobile Bottom Nav - Refined Fixed Layout */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] backdrop-blur-lg z-50 pb-[env(safe-area-inset-bottom)] transition-all duration-300">
-            <div className="flex justify-around items-end h-[60px] px-1 relative">
+        {/* Mobile Bottom Nav - Optimized Fixed Layout */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] backdrop-blur-lg z-50 pb-[env(safe-area-inset-bottom)]">
+            <div className="flex justify-between items-end h-[60px] px-2 relative">
                 
-                {/* 1. Dashboard */}
-                <MobileNavItem 
-                    active={currentView === View.DASHBOARD} 
-                    onClick={() => setCurrentView(View.DASHBOARD)} 
-                    icon={<Icons.Dashboard />} 
-                    label="الرئيسية" 
-                />
-                
-                {/* 2. Search */}
-                {can('search_odb', 'view') && (
-                    <MobileNavItem 
-                        active={currentView === View.SEARCH_ODB} 
-                        onClick={() => setCurrentView(View.SEARCH_ODB)} 
-                        icon={<Icons.Search />} 
-                        label="بحث" 
+                {/* Left Side */}
+                <div className="flex-1 flex justify-around">
+                     <MobileNavItem 
+                        active={currentView === View.DASHBOARD} 
+                        onClick={() => setCurrentView(View.DASHBOARD)} 
+                        icon={<Icons.Dashboard />} 
+                        label="الرئيسية" 
                     />
-                )}
-                
-                {/* 3. CENTER MAP BUTTON - Floating Effect */}
-                <div className="relative -top-6 group z-10">
+                    {can('search_odb', 'view') && (
+                        <MobileNavItem 
+                            active={currentView === View.SEARCH_ODB} 
+                            onClick={() => setCurrentView(View.SEARCH_ODB)} 
+                            icon={<Icons.Search />} 
+                            label="بحث" 
+                        />
+                    )}
+                </div>
+
+                {/* CENTER MAP BUTTON - Floating Effect */}
+                <div className="relative -top-6 px-2 z-10 shrink-0">
                      {can('map_filter', 'view') ? (
-                        <>
+                        <div className="flex flex-col items-center">
                             <button 
                                 onClick={() => setCurrentView(View.MAP_FILTER)} 
-                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl border-[4px] border-gray-50 transition-all duration-300 transform active:scale-95 ${currentView === View.MAP_FILTER ? 'bg-primary text-white shadow-blue-500/40 scale-110' : 'bg-secondary text-white hover:bg-gray-800'}`}
+                                className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl border-[4px] border-gray-50 transition-all duration-300 transform active:scale-95 ${currentView === View.MAP_FILTER ? 'bg-primary text-white shadow-blue-500/40 scale-105' : 'bg-gray-800 text-white hover:bg-gray-700'}`}
                             >
                                 <Icons.Map />
                             </button>
-                            <span className={`absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] font-bold whitespace-nowrap transition-colors duration-300 ${currentView === View.MAP_FILTER ? 'text-primary opacity-100' : 'text-gray-400 opacity-0'}`}>
+                            <span className={`absolute -bottom-5 text-[10px] font-bold whitespace-nowrap transition-all duration-300 ${currentView === View.MAP_FILTER ? 'text-primary opacity-100 translate-y-0' : 'text-gray-400 opacity-0 -translate-y-2'}`}>
                                 الخريطة
                             </span>
-                        </>
+                        </div>
                      ) : (
-                        <div className="w-10" /> // Spacer if no map permission
+                         <div className="w-4"></div>
                      )}
                 </div>
 
-                {/* 4. Activity */}
-                {can('my_activity', 'view') && (
-                    <MobileNavItem 
-                        active={currentView === View.MY_ACTIVITY} 
-                        onClick={() => setCurrentView(View.MY_ACTIVITY)} 
-                        icon={<Icons.Check />} 
-                        label="نشاطي" 
-                    />
-                )}
+                {/* Right Side */}
+                <div className="flex-1 flex justify-around">
+                     {can('my_activity', 'view') ? (
+                        <MobileNavItem 
+                            active={currentView === View.MY_ACTIVITY} 
+                            onClick={() => setCurrentView(View.MY_ACTIVITY)} 
+                            icon={<Icons.Check />} 
+                            label="نشاطي" 
+                        />
+                    ) : (
+                         <MobileNavItem 
+                            active={currentView === View.NEARBY} 
+                            onClick={() => setCurrentView(View.NEARBY)} 
+                            icon={<Icons.MapPin />} 
+                            label="القريبة" 
+                        />
+                    )}
 
-                {/* 5. Team or Profile */}
-                {can('users', 'view') ? (
-                    <MobileNavItem 
-                        active={currentView === View.USERS} 
-                        onClick={() => setCurrentView(View.USERS)} 
-                        icon={<Icons.Users />} 
-                        label="الفريق" 
-                    />
-                ) : (
-                    <MobileNavItem 
-                        active={currentView === View.PROFILE} 
-                        onClick={() => setCurrentView(View.PROFILE)} 
-                        icon={<Icons.User />} 
-                        label="حسابي" 
-                    />
-                )}
+                    {can('users', 'view') ? (
+                        <MobileNavItem 
+                            active={currentView === View.USERS} 
+                            onClick={() => setCurrentView(View.USERS)} 
+                            icon={<Icons.Users />} 
+                            label="الفريق" 
+                        />
+                    ) : (
+                        <MobileNavItem 
+                            active={currentView === View.PROFILE} 
+                            onClick={() => setCurrentView(View.PROFILE)} 
+                            icon={<Icons.User />} 
+                            label="حسابي" 
+                        />
+                    )}
+                </div>
             </div>
         </nav>
       </main>
@@ -317,7 +318,7 @@ const SidebarItem = ({ active, onClick, icon, text }: any) => (
 
 const MobileNavItem = ({ active, onClick, icon, label }: any) => (
     <button onClick={onClick} className={`flex-1 flex flex-col items-center justify-center h-14 space-y-1 transition-all duration-200 group active:scale-95 ${active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}>
-        <div className={`p-1 rounded-xl transition-colors ${active ? 'bg-blue-50' : 'bg-transparent'}`}>
+        <div className={`p-1.5 rounded-xl transition-colors ${active ? 'bg-blue-50' : 'bg-transparent'}`}>
             <span className="[&>svg]:w-6 [&>svg]:h-6 transition-transform group-hover:-translate-y-0.5">{icon}</span>
         </div>
         <span className={`text-[10px] font-medium ${active ? 'font-bold' : ''}`}>{label}</span>

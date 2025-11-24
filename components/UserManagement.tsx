@@ -129,7 +129,6 @@ const UserManagement: React.FC = () => {
       // Validation with Feedback
       if (!formData.name) return setModalError("يرجى إدخال الاسم");
       if (!formData.username) return setModalError("يرجى إدخال اسم المستخدم");
-      // Password is required for NEW users (id === 0)
       if (!formData.id && !formData.password) return setModalError("يرجى إدخال كلمة المرور للمستخدم الجديد");
 
       if (currentUser?.role === 'supervisor' && formData.role === 'admin') return setModalError("عفواً، لا يمكنك إنشاء حساب مدير.");
@@ -147,15 +146,28 @@ const UserManagement: React.FC = () => {
       }
   };
 
-  const handleDelete = async (id: number) => {
-      if (window.confirm('هل أنت متأكد من الحذف؟')) {
+  const handleDelete = async () => {
+      if (!formData.id) return;
+      if (window.confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟')) {
           try {
-            await deleteUser(id);
+            await deleteUser(formData.id);
+            setIsModalOpen(false);
             loadData();
           } catch (error: any) {
-            alert("فشل الحذف: " + error.message);
+            setModalError("فشل الحذف: " + error.message);
           }
       }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!formData.id) return;
+    try {
+        await toggleUserStatus(formData.id);
+        setFormData(prev => ({ ...prev, isActive: !prev.isActive }));
+        loadData();
+    } catch (error: any) {
+        setModalError("فشل تغيير الحالة: " + error.message);
+    }
   };
 
   const isPermitted = (resource: string, action: string) => {
@@ -163,67 +175,152 @@ const UserManagement: React.FC = () => {
       return p?.actions.includes(action as any);
   };
 
-  // Determine if checkbox is disabled (Hierarchy Security)
   const isPermissionDisabled = (resource: string, action: string) => {
       if (currentUser?.role === 'admin') return false;
-      // Supervisor cannot grant what they don't have
       return !hasPermission(currentUser!, resource, action);
   };
 
   if (!currentUser) return <div>Access Denied</div>;
 
+  const stats = {
+      total: users.length,
+      active: users.filter(u => u.isActive).length,
+      inactive: users.filter(u => !u.isActive).length,
+      admins: users.filter(u => u.role === 'admin').length,
+      supervisors: users.filter(u => u.role === 'supervisor').length,
+      delegates: users.filter(u => u.role === 'delegate').length,
+  };
+
+  const StatCard = ({ title, value, icon, color, bg }: any) => (
+      <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between min-w-[110px] md:min-w-[130px] snap-start">
+            <div className="flex justify-between items-start mb-2">
+                <span className={`text-[10px] md:text-xs font-bold ${color}`}>{title}</span>
+                <div className={`${bg} ${color.replace('text-', 'text-opacity-80 ')} p-1.5 rounded-lg`}>{icon}</div>
+            </div>
+            <span className="text-xl font-bold text-gray-800">{value}</span>
+      </div>
+  );
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col h-full">
-       <div className="p-4 md:p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
-           <div>
-               <h2 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
-                   <Icons.Users />
-                   <span>إدارة الهيكل الوظيفي</span>
-               </h2>
+    <div className="flex flex-col space-y-4 pb-24 md:pb-0">
+       
+       {/* شريط الإحصائيات - قابل للتمرير */}
+       <div className="flex overflow-x-auto gap-3 pb-2 -mx-2 px-2 md:mx-0 md:px-0 md:grid md:grid-cols-5 md:overflow-visible no-scrollbar snap-x">
+            <StatCard title="إجمالي الفريق" value={stats.total} icon={<Icons.Users />} color="text-gray-500" bg="bg-gray-50" />
+            <StatCard title="حساب نشط" value={stats.active} icon={<Icons.Check />} color="text-green-600" bg="bg-green-50" />
+            <StatCard title="موقوف" value={stats.inactive} icon={<Icons.Ban />} color="text-red-500" bg="bg-red-50" />
+            <StatCard title="مشرفين" value={stats.supervisors} icon={<Icons.Shield />} color="text-purple-500" bg="bg-purple-50" />
+            <StatCard title="مناديب" value={stats.delegates} icon={<Icons.User />} color="text-blue-500" bg="bg-blue-50" />
+       </div>
+
+       {/* الهيدر وزر الإضافة */}
+       <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm sticky top-0 z-10">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Icons.Users />
+                <span>إدارة المستخدمين</span>
+            </h2>
+            <button onClick={() => handleOpenModal()} className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-xs font-bold shadow-lg shadow-blue-500/20 active:scale-95">
+                <Icons.Plus />
+                <span>عضو جديد</span>
+            </button>
+       </div>
+
+       {/* التحميل */}
+       {loading && (
+           <div className="text-center py-10">
+               <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+               <p className="text-gray-400 text-sm mt-2">جاري تحميل البيانات...</p>
            </div>
-           <button onClick={() => handleOpenModal()} className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-xs md:text-sm font-bold">
-               <Icons.Plus />
-               <span>عضو جديد</span>
-           </button>
-       </div>
+       )}
 
-       <div className="overflow-x-auto flex-1">
-           <table className="w-full text-right min-w-[600px]">
-               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider sticky top-0 z-10">
-                   <tr>
-                       <th className="px-6 py-3">الموظف</th>
-                       <th className="px-6 py-3">الدور</th>
-                       <th className="px-6 py-3">المدير المباشر</th>
-                       <th className="px-6 py-3">الحالة</th>
-                       <th className="px-6 py-3">تحكم</th>
-                   </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-100">
-                   {loading ? ( <tr><td colSpan={5} className="text-center py-10">...</td></tr> ) : users.map(user => (
-                       <tr key={user.id} className="hover:bg-gray-50/50">
-                           <td className="px-6 py-4 flex items-center gap-3">
-                               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs ${user.role === 'admin' ? 'bg-black' : user.role === 'supervisor' ? 'bg-purple-600' : 'bg-blue-500'}`}>{user.name.charAt(0)}</div>
-                               <div><div className="font-bold text-sm">{user.name}</div><div className="text-xs text-gray-400">@{user.username}</div></div>
-                           </td>
-                           <td className="px-6 py-4"><span className="text-xs font-bold bg-gray-100 px-2 py-1 rounded">{user.role}</span></td>
-                           <td className="px-6 py-4 text-xs text-gray-500">{user.supervisorId ? users.find(u => u.id === user.supervisorId)?.name : '-'}</td>
-                           <td className="px-6 py-4"><button onClick={() => toggleUserStatus(user.id).then(loadData)} className={`text-[10px] px-2 py-1 rounded font-bold ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{user.isActive ? 'نشط' : 'موقوف'}</button></td>
-                           <td className="px-6 py-4 flex gap-2">
-                               <button onClick={() => handleOpenModal(user)} className="text-blue-600 bg-blue-50 p-1.5 rounded"><Icons.Edit /></button>
-                               {user.id !== currentUser.id && <button onClick={() => handleDelete(user.id)} className="text-red-600 bg-red-50 p-1.5 rounded"><Icons.Trash /></button>}
-                           </td>
-                       </tr>
-                   ))}
-               </tbody>
-           </table>
+       {/* جدول الديسك توب - عرض فقط بدون أزرار */}
+       {!loading && (
+       <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-right min-w-[600px]">
+                    <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th className="px-4 py-3 text-center w-12">#</th>
+                            <th className="px-6 py-3">الموظف</th>
+                            <th className="px-6 py-3">الدور الوظيفي</th>
+                            <th className="px-6 py-3">المدير المباشر</th>
+                            <th className="px-6 py-3 text-center">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                         {users.map((user, index) => (
+                            <tr key={user.id} onClick={() => handleOpenModal(user)} className="hover:bg-blue-50 cursor-pointer transition-colors group">
+                                <td className="px-4 py-4 text-center text-gray-400 font-mono text-xs">{index + 1}</td>
+                                <td className="px-6 py-4 flex items-center gap-3">
+                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm ${user.role === 'admin' ? 'bg-gray-800' : user.role === 'supervisor' ? 'bg-purple-600' : 'bg-blue-500'}`}>{user.name.charAt(0)}</div>
+                                    <div><div className="font-bold text-sm text-gray-800 group-hover:text-primary transition-colors">{user.name}</div><div className="text-xs text-gray-400 font-mono">@{user.username}</div></div>
+                                </td>
+                                <td className="px-6 py-4">
+                                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                                        user.role === 'admin' ? 'bg-gray-100 text-gray-700 border-gray-200' : 
+                                        user.role === 'supervisor' ? 'bg-purple-50 text-purple-700 border-purple-100' : 
+                                        'bg-blue-50 text-blue-700 border-blue-100'
+                                    }`}>
+                                        {user.role === 'admin' ? 'مدير نظام' : user.role === 'supervisor' ? 'مشرف منطقة' : 'مندوب ميداني'}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-xs font-medium text-gray-500">{user.supervisorId ? users.find(u => u.id === user.supervisorId)?.name : '-'}</td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
        </div>
+       )}
 
+       {/* بطاقات الموبايل - تصميم نظيف كجهات الاتصال */}
+       {!loading && (
+        <div className="md:hidden space-y-3">
+            {users.map((user, index) => (
+                <div key={user.id} onClick={() => handleOpenModal(user)} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden">
+                     {/* شريط الحالة الملون */}
+                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+
+                     {/* رقم المستخدم */}
+                     <div className="text-[10px] text-gray-300 font-mono absolute top-2 left-3">#{index + 1}</div>
+
+                     {/* الصورة الرمزية */}
+                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0 shadow-md border-2 border-white ${user.role === 'admin' ? 'bg-gray-800' : user.role === 'supervisor' ? 'bg-purple-600' : 'bg-blue-500'}`}>
+                         {user.name.charAt(0)}
+                     </div>
+
+                     {/* البيانات */}
+                     <div className="flex-1 min-w-0">
+                         <h3 className="font-bold text-gray-900 truncate text-sm">{user.name}</h3>
+                         <div className="flex items-center gap-2 mt-0.5">
+                             <span className="text-xs text-gray-400 font-mono">@{user.username}</span>
+                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                 user.role === 'admin' ? 'bg-gray-100 text-gray-600' : user.role === 'supervisor' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'
+                             }`}>
+                                 {user.role === 'admin' ? 'مدير' : user.role === 'supervisor' ? 'مشرف' : 'مندوب'}
+                             </span>
+                         </div>
+                     </div>
+
+                     {/* سهم التوجيه */}
+                     <div className="text-gray-300">
+                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                     </div>
+                </div>
+            ))}
+        </div>
+       )}
+
+       {/* النافذة المنبثقة للتعديل */}
        {isModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col animate-in zoom-in-95">
-            <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="font-bold text-lg">{formData.id ? 'تعديل بيانات العضو' : 'إضافة عضو جديد'}</h3>
-                <button onClick={() => setIsModalOpen(false)}><Icons.X /></button>
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
+                <h3 className="font-bold text-lg text-gray-800">{formData.id ? 'بيانات المستخدم' : 'إضافة عضو جديد'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500"><Icons.X /></button>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -244,12 +341,12 @@ const UserManagement: React.FC = () => {
                          <input type="email" required placeholder="Email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-gray-500 block mb-1">اسم المستخدم (للدخول)</label>
+                        <label className="text-xs font-bold text-gray-500 block mb-1">اسم المستخدم</label>
                         <input type="text" required placeholder="Username" disabled={!!formData.id} value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100" />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 block mb-1">كلمة المرور</label>
-                        <input type="password" placeholder={formData.id ? "اتركها فارغة للتجاهل" : "كلمة المرور"} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <input type="password" placeholder={formData.id ? "تغيير كلمة المرور..." : "كلمة المرور"} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                     
                     <div>
@@ -272,9 +369,9 @@ const UserManagement: React.FC = () => {
                     )}
                 </div>
                 
-                {/* PERMISSION MATRIX */}
+                {/* جدول الصلاحيات */}
                 <div>
-                    <h4 className="font-bold text-sm text-gray-500 mb-2 uppercase border-b pb-1">صلاحيات الوصول المتقدمة</h4>
+                    <h4 className="font-bold text-sm text-gray-500 mb-2 uppercase border-b pb-1">صلاحيات الوصول</h4>
                     <div className="border rounded-xl overflow-hidden text-sm mt-3">
                          <table className="w-full text-center">
                              <thead className="bg-gray-100 text-xs text-gray-600">
@@ -286,8 +383,6 @@ const UserManagement: React.FC = () => {
                                          <td className="p-2 text-right font-bold text-gray-700 bg-gray-50/50">{res.label}</td>
                                          {ACTIONS.map(act => {
                                              if (res.id === 'dashboard' && act.id !== 'view') return <td key={act.id}></td>;
-                                             
-                                             // UPDATE: Allow both view and edit for Search ODB
                                              if (res.id === 'search_odb' && !['view', 'edit'].includes(act.id)) return <td key={act.id}></td>;
 
                                              const checked = isPermitted(res.id, act.id);
@@ -311,15 +406,40 @@ const UserManagement: React.FC = () => {
                     </div>
                 </div>
             </div>
-            <div className="p-4 border-t flex justify-end gap-3 bg-gray-50">
-                <button onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-lg font-bold text-gray-600 hover:bg-gray-200 transition-colors">إلغاء</button>
+
+            {/* شريط الأزرار - أيقونات على الموبايل */}
+            <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex items-center gap-3">
+                {/* زر الحذف - أيقونة فقط على الموبايل */}
+                {formData.id && formData.id !== currentUser.id && (
+                    <button 
+                        onClick={handleDelete} 
+                        className="bg-red-50 text-red-600 w-12 h-12 md:w-auto md:px-4 md:py-2.5 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 border border-red-100"
+                        title="حذف المستخدم"
+                    >
+                        <Icons.Trash /> 
+                        <span className="hidden md:inline">حذف</span>
+                    </button>
+                )}
+
+                {/* زر الحالة - أيقونة فقط على الموبايل */}
+                {formData.id && formData.id !== currentUser.id && (
+                    <button 
+                        onClick={handleToggleStatus}
+                        className={`w-12 h-12 md:w-auto md:px-4 md:py-2.5 md:flex-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors border ${formData.isActive ? 'bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100' : 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'}`}
+                        title={formData.isActive ? 'إيقاف الحساب' : 'تنشيط الحساب'}
+                    >
+                        {formData.isActive ? <Icons.Ban /> : <Icons.Check />}
+                        <span className="hidden md:inline">{formData.isActive ? 'إيقاف الحساب' : 'تنشيط الحساب'}</span>
+                    </button>
+                )}
+
+                {/* زر الحفظ - كبير دائماً */}
                 <button 
                     onClick={handleSave} 
                     disabled={isSaving}
-                    className="px-8 py-2.5 rounded-lg font-bold text-white bg-primary hover:bg-blue-700 transition-colors disabled:opacity-70 flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                    className="flex-1 h-12 md:h-auto md:px-6 md:py-2.5 rounded-xl font-bold text-white bg-primary hover:bg-blue-700 transition-colors disabled:opacity-70 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
                 >
-                    {isSaving && <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></span>}
-                    <span>{isSaving ? 'جاري الحفظ...' : 'حفظ البيانات'}</span>
+                    {isSaving ? <span className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></span> : 'حفظ التعديلات'}
                 </button>
             </div>
           </div>

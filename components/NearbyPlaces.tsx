@@ -50,7 +50,6 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
         processNearby(latitude, longitude);
       },
       (error) => {
-        // Only show error if we are stuck in loading, otherwise keep idle or previous state
         setStatus('error');
         let msg = 'حدث خطأ أثناء تحديد الموقع.';
         if (error.code === 1) msg = 'يرجى السماح بتحديد الموقع لعرض الأماكن القريبة.';
@@ -67,7 +66,6 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
         const currentSettings = await getSiteSettings();
         setSettings(currentSettings); // Update state for UI
 
-        // Use strict settings from Global Configuration
         const limit = currentSettings.maxResults || 20; 
         
         const places = await getNearbyLocationsAPI(
@@ -77,7 +75,6 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
             limit
         );
 
-        // Client-side duplicate filter
         const uniquePlaces = places.filter((place, index, self) => 
             index === self.findIndex((t) => t.ODB_ID === place.ODB_ID)
         );
@@ -98,18 +95,10 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       setIsModalOpen(true);
   };
 
-  const handleEditClick = (e: React.MouseEvent, place: NearbyLocation) => {
-      e.stopPropagation();
-      setSelectedLocation(place);
-      setModalMode('edit');
-      setIsModalOpen(true);
-  };
-
   const handleSave = async (data: ODBLocation) => {
     try {
         await saveODBLocation(data);
         
-        // Update local list
         setNearbyPlaces(prev => prev.map(p => {
             if (p.id === data.id) {
                 return { ...p, ...data, distance: p.distance };
@@ -202,8 +191,7 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
       {status === 'loading' && (
         <div className="flex flex-col gap-3">
              <div className="text-center text-gray-400 text-xs animate-pulse mb-2">
-                 جاري البحث عن أقرب {settings?.maxResults || '...'} موقع
-                 {settings?.searchRadius ? ` في نطاق ${settings.searchRadius} كم` : ''}...
+                 جاري البحث عن أقرب {settings?.maxResults || '...'} موقع...
              </div>
              {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse"></div>)}
         </div>
@@ -235,8 +223,9 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                                 <CopyableText text={place.ODB_ID} className="text-blue-600 font-mono text-sm hover:bg-blue-50 px-2 py-0.5 rounded" />
                             </td>
                             <td className="py-3 px-4 text-center flex justify-center gap-2">
-                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="p-1.5 text-gray-400 hover:text-blue-600" title="اتجاهات"><Icons.Navigation /></button>
-                                <button onClick={(e) => handleEditClick(e, place)} className="p-1.5 text-gray-400 hover:text-purple-600" title="تعديل"><Icons.Edit /></button>
+                                <button onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} className="flex items-center gap-1 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors" title="الذهاب للموقع">
+                                    <Icons.Navigation /> <span>ذهاب</span>
+                                </button>
                             </td>
                         </tr>
                     ))}
@@ -244,29 +233,30 @@ const NearbyPlaces: React.FC<NearbyPlacesProps> = ({ user }) => {
                 </table>
             </div>
 
-            {/* Mobile Cards (Compact) */}
+            {/* Mobile Cards (Redesigned to match MapFilter) */}
             <div className="md:hidden space-y-2 pb-4">
                 {nearbyPlaces.map((place) => (
-                    <div key={place.ODB_ID} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform" onClick={() => handleItemClick(place)}>
-                        <div className="flex items-center gap-3">
-                            <div className="shrink-0 w-12 h-12 bg-green-50 text-green-700 border border-green-100 rounded-lg flex flex-col items-center justify-center" onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)}>
-                                <span className="text-sm font-bold leading-none">{place.distance.toFixed(1)}</span>
-                                <span className="text-[9px] font-bold leading-none mt-0.5 opacity-70">كم</span>
+                    <div key={place.ODB_ID} onClick={() => handleItemClick(place)} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                        <div className="w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border bg-green-50 border-green-100 text-green-700">
+                            <span className="text-sm font-bold leading-none">{place.distance.toFixed(1)}</span>
+                            <span className="text-[9px] opacity-75">km</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex justify-between items-start">
+                                <h4 className="font-bold text-gray-900 truncate text-sm">{place.CITYNAME}</h4>
+                                <CopyableText text={place.ODB_ID} className="text-[10px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start">
-                                    <h3 className="font-bold text-sm text-gray-900 truncate">{place.CITYNAME}</h3>
-                                    <CopyableText text={place.ODB_ID} className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded" />
-                                </div>
-                                <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-400">
-                                    <Icons.Navigation />
-                                    <span>انقر للاتجاهات</span>
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-1 border-r border-gray-100 pr-2 mr-1">
-                                <button onClick={(e) => handleEditClick(e, place)} className="text-gray-400 hover:text-blue-500 p-1.5"><Icons.Edit /></button>
+                            <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">
+                                <span className="dir-ltr">{place.LATITUDE.toFixed(4)}, {place.LONGITUDE.toFixed(4)}</span>
                             </div>
                         </div>
+                        <button 
+                            onClick={(e) => handleDirectDirections(e, place.LATITUDE, place.LONGITUDE)} 
+                            className="p-2 text-gray-400 hover:text-green-600 bg-gray-50 rounded-lg ml-2 active:bg-green-100 active:text-green-700 transition-colors"
+                            title="ذهاب للموقع"
+                        >
+                            <Icons.Navigation />
+                        </button>
                     </div>
                 ))}
             </div>

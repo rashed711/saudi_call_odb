@@ -125,8 +125,6 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                   async (position) => {
                       const { latitude, longitude } = position.coords;
                       
-                      // CRITICAL FIX: Fetch actual nearby locations from server to ensure
-                      // the nearest items are present, even if they are old/not in general list.
                       const limit = currentSettings.maxResults || 20;
                       // Pass searchRadius if set, otherwise 0 for "nearest whatever distance"
                       const nearbyData = await getNearbyLocationsAPI(
@@ -303,13 +301,6 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
       window.open(url, '_blank');
   };
 
-  const handleEditClick = (e: React.MouseEvent, loc: ODBLocation) => {
-    e.stopPropagation();
-    setSelectedLocation(loc);
-    setModalMode('edit');
-    setIsModalOpen(true);
-  };
-
   const handleSave = async (data: ODBLocation) => {
       await saveODBLocation(data);
       setFilteredLocations(prev => prev.map(p => p.id === data.id ? {...p, ...data} : p));
@@ -433,10 +424,11 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                                         <td className="px-4 py-3">
                                             <button 
                                                 onClick={(e) => handleNavigate(e, loc)} 
-                                                className="p-1.5 text-gray-400 hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors opacity-0 group-hover:opacity-100"
                                                 title="ذهاب للموقع"
                                             >
                                                 <Icons.Navigation />
+                                                <span className="hidden lg:inline">ذهاب</span>
                                             </button>
                                         </td>
                                     </tr>
