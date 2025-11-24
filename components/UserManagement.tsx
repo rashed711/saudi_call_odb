@@ -201,6 +201,9 @@ const UserManagement: React.FC = () => {
       </div>
   );
 
+  // Logic Check for Self Editing
+  const isEditingSelf = currentUser.id === formData.id;
+  
   return (
     <div className="flex flex-col space-y-4 pb-24 md:pb-0">
        
@@ -253,7 +256,12 @@ const UserManagement: React.FC = () => {
                                 <td className="px-4 py-4 text-center text-gray-400 font-mono text-xs">{index + 1}</td>
                                 <td className="px-6 py-4 flex items-center gap-3">
                                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm ${user.role === 'admin' ? 'bg-gray-800' : user.role === 'supervisor' ? 'bg-purple-600' : 'bg-blue-500'}`}>{user.name.charAt(0)}</div>
-                                    <div><div className="font-bold text-sm text-gray-800 group-hover:text-primary transition-colors">{user.name}</div><div className="text-xs text-gray-400 font-mono">@{user.username}</div></div>
+                                    <div>
+                                        <div className="font-bold text-sm text-gray-800 group-hover:text-primary transition-colors">
+                                            {user.name} {user.id === currentUser.id && <span className="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">(أنت)</span>}
+                                        </div>
+                                        <div className="text-xs text-gray-400 font-mono">@{user.username}</div>
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
@@ -294,7 +302,10 @@ const UserManagement: React.FC = () => {
 
                      {/* البيانات */}
                      <div className="flex-1 min-w-0">
-                         <h3 className="font-bold text-gray-900 truncate text-sm">{user.name}</h3>
+                         <h3 className="font-bold text-gray-900 truncate text-sm flex items-center gap-1">
+                             {user.name}
+                             {user.id === currentUser.id && <span className="text-[8px] bg-gray-100 text-gray-500 px-1 rounded-sm font-normal">أنت</span>}
+                         </h3>
                          <div className="flex items-center gap-2 mt-0.5">
                              <span className="text-xs text-gray-400 font-mono">@{user.username}</span>
                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
@@ -319,7 +330,10 @@ const UserManagement: React.FC = () => {
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col animate-in zoom-in-95">
             <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                <h3 className="font-bold text-lg text-gray-800">{formData.id ? 'بيانات المستخدم' : 'إضافة عضو جديد'}</h3>
+                <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                    {formData.id ? 'بيانات المستخدم' : 'إضافة عضو جديد'}
+                    {isEditingSelf && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">ملفك الشخصي</span>}
+                </h3>
                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500"><Icons.X /></button>
             </div>
             
@@ -328,6 +342,17 @@ const UserManagement: React.FC = () => {
                     <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-start gap-3 border border-red-100">
                         <Icons.Ban />
                         <div className="text-sm font-bold">{modalError}</div>
+                    </div>
+                )}
+
+                {/* تحذير عند تعديل النفس */}
+                {isEditingSelf && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-3 items-start text-sm text-blue-800">
+                        <Icons.Shield />
+                        <div>
+                            <span className="font-bold block">حماية الصلاحيات</span>
+                            <span className="opacity-80 text-xs">لا يمكنك تعديل صلاحياتك أو دورك الوظيفي بنفسك. يرجى التواصل مع مدير آخر إذا تطلب الأمر.</span>
+                        </div>
                     </div>
                 )}
 
@@ -351,7 +376,12 @@ const UserManagement: React.FC = () => {
                     
                     <div>
                         <label className="text-xs font-bold text-gray-500 block mb-1">نوع الحساب</label>
-                        <select value={formData.role} onChange={(e) => handleRoleChange(e.target.value)} disabled={currentUser.role === 'delegate'} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        <select 
+                            value={formData.role} 
+                            onChange={(e) => handleRoleChange(e.target.value)} 
+                            disabled={isEditingSelf || currentUser.role === 'delegate'} 
+                            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                        >
                             {currentUser.role === 'admin' && <option value="admin">مدير نظام (Admin)</option>}
                             <option value="supervisor">مشرف (Supervisor)</option>
                             <option value="delegate">مندوب (Delegate)</option>
@@ -361,7 +391,12 @@ const UserManagement: React.FC = () => {
                     {(formData.role === 'delegate' || formData.role === 'supervisor') && (
                         <div>
                             <label className="text-xs font-bold text-gray-500 block mb-1">المشرف المسؤول</label>
-                            <select value={formData.supervisorId || ''} onChange={(e) => setFormData({...formData, supervisorId: Number(e.target.value)})} disabled={currentUser.role === 'supervisor'} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <select 
+                                value={formData.supervisorId || ''} 
+                                onChange={(e) => setFormData({...formData, supervisorId: Number(e.target.value)})} 
+                                disabled={currentUser.role === 'supervisor'} 
+                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
+                            >
                                 <option value="">-- اختر المشرف --</option>
                                 {supervisors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
@@ -371,8 +406,11 @@ const UserManagement: React.FC = () => {
                 
                 {/* جدول الصلاحيات */}
                 <div>
-                    <h4 className="font-bold text-sm text-gray-500 mb-2 uppercase border-b pb-1">صلاحيات الوصول</h4>
-                    <div className="border rounded-xl overflow-hidden text-sm mt-3">
+                    <h4 className="font-bold text-sm text-gray-500 mb-2 uppercase border-b pb-1 flex justify-between">
+                        <span>صلاحيات الوصول</span>
+                        {isEditingSelf && <span className="text-xs text-red-500 font-normal">(للعرض فقط)</span>}
+                    </h4>
+                    <div className={`border rounded-xl overflow-hidden text-sm mt-3 ${isEditingSelf ? 'opacity-60 pointer-events-none grayscale-[0.5]' : ''}`}>
                          <table className="w-full text-center">
                              <thead className="bg-gray-100 text-xs text-gray-600">
                                  <tr><th className="p-2 text-right">القسم</th>{ACTIONS.map(a => <th key={a.id} className="p-2">{a.label}</th>)}</tr>
@@ -392,7 +430,7 @@ const UserManagement: React.FC = () => {
                                                      <input 
                                                         type="checkbox" 
                                                         checked={!!checked} 
-                                                        disabled={disabled} 
+                                                        disabled={disabled || isEditingSelf} 
                                                         onChange={() => togglePermission(res.id, act.id)} 
                                                         className="w-5 h-5 accent-blue-600 cursor-pointer disabled:opacity-30 rounded focus:ring-0" 
                                                      />
@@ -407,10 +445,10 @@ const UserManagement: React.FC = () => {
                 </div>
             </div>
 
-            {/* شريط الأزرار - أيقونات على الموبايل */}
+            {/* شريط الأزرار */}
             <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex items-center gap-3">
-                {/* زر الحذف - أيقونة فقط على الموبايل */}
-                {formData.id && formData.id !== currentUser.id && (
+                {/* زر الحذف - مخفي إذا كان المستخدم يعدل نفسه */}
+                {formData.id && !isEditingSelf && (
                     <button 
                         onClick={handleDelete} 
                         className="bg-red-50 text-red-600 w-12 h-12 md:w-auto md:px-4 md:py-2.5 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 border border-red-100"
@@ -421,8 +459,8 @@ const UserManagement: React.FC = () => {
                     </button>
                 )}
 
-                {/* زر الحالة - أيقونة فقط على الموبايل */}
-                {formData.id && formData.id !== currentUser.id && (
+                {/* زر الحالة - مخفي إذا كان المستخدم يعدل نفسه */}
+                {formData.id && !isEditingSelf && (
                     <button 
                         onClick={handleToggleStatus}
                         className={`w-12 h-12 md:w-auto md:px-4 md:py-2.5 md:flex-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors border ${formData.isActive ? 'bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100' : 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'}`}
