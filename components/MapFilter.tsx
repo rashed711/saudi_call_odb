@@ -297,6 +297,12 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
     setIsModalOpen(true);
   };
 
+  const handleNavigate = (e: React.MouseEvent, loc: ODBLocation) => {
+      e.stopPropagation();
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${loc.LATITUDE},${loc.LONGITUDE}&travelmode=driving`;
+      window.open(url, '_blank');
+  };
+
   const handleEditClick = (e: React.MouseEvent, loc: ODBLocation) => {
     e.stopPropagation();
     setSelectedLocation(loc);
@@ -425,8 +431,12 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                                             <CopyableText text={loc.ODB_ID} className="text-blue-600 font-mono text-xs hover:bg-blue-50 px-2 py-0.5 rounded" />
                                         </td>
                                         <td className="px-4 py-3">
-                                            <button onClick={(e) => handleEditClick(e, loc)} className="p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Icons.Edit />
+                                            <button 
+                                                onClick={(e) => handleNavigate(e, loc)} 
+                                                className="p-1.5 text-gray-400 hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                title="ذهاب للموقع"
+                                            >
+                                                <Icons.Navigation />
                                             </button>
                                         </td>
                                     </tr>
@@ -455,8 +465,12 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
                                             <span className="dir-ltr">{loc.LATITUDE.toFixed(4)}, {loc.LONGITUDE.toFixed(4)}</span>
                                         </div>
                                     </div>
-                                    <button onClick={(e) => handleEditClick(e, loc)} className="p-2 text-gray-400 hover:text-blue-600">
-                                        <Icons.Edit />
+                                    <button 
+                                        onClick={(e) => handleNavigate(e, loc)} 
+                                        className="p-2 text-gray-400 hover:text-green-600 bg-gray-50 rounded-lg ml-2 active:bg-green-100 active:text-green-700 transition-colors"
+                                        title="ذهاب للموقع"
+                                    >
+                                        <Icons.Navigation />
                                     </button>
                                 </div>
                             ))}

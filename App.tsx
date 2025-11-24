@@ -218,21 +218,74 @@ const App: React.FC = () => {
             {renderContent()}
         </div>
 
-        {/* Mobile Bottom Nav */}
-        <nav className="md:hidden shrink-0 h-[calc(4rem+env(safe-area-inset-bottom))] bg-white border-t border-gray-200 flex justify-around items-start pt-1 px-2 z-30 shadow-up pb-[env(safe-area-inset-bottom)]">
-            <MobileNavItem active={currentView === View.DASHBOARD} onClick={() => setCurrentView(View.DASHBOARD)} icon={<Icons.Dashboard />} label="الرئيسية" />
-            
-            {can('search_odb', 'view') && <MobileNavItem active={currentView === View.SEARCH_ODB} onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} label="بحث" />}
-            
-            {can('map_filter', 'view') && (
-                <div className="-mt-6">
-                    <button onClick={() => setCurrentView(View.MAP_FILTER)} className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${currentView === View.MAP_FILTER ? 'bg-primary text-white' : 'bg-secondary text-white'}`}>
-                        <Icons.Map />
-                    </button>
+        {/* Mobile Bottom Nav - Refined Fixed Layout */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] backdrop-blur-lg z-50 pb-[env(safe-area-inset-bottom)] transition-all duration-300">
+            <div className="flex justify-around items-end h-[60px] px-1 relative">
+                
+                {/* 1. Dashboard */}
+                <MobileNavItem 
+                    active={currentView === View.DASHBOARD} 
+                    onClick={() => setCurrentView(View.DASHBOARD)} 
+                    icon={<Icons.Dashboard />} 
+                    label="الرئيسية" 
+                />
+                
+                {/* 2. Search */}
+                {can('search_odb', 'view') && (
+                    <MobileNavItem 
+                        active={currentView === View.SEARCH_ODB} 
+                        onClick={() => setCurrentView(View.SEARCH_ODB)} 
+                        icon={<Icons.Search />} 
+                        label="بحث" 
+                    />
+                )}
+                
+                {/* 3. CENTER MAP BUTTON - Floating Effect */}
+                <div className="relative -top-6 group z-10">
+                     {can('map_filter', 'view') ? (
+                        <>
+                            <button 
+                                onClick={() => setCurrentView(View.MAP_FILTER)} 
+                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl border-[4px] border-gray-50 transition-all duration-300 transform active:scale-95 ${currentView === View.MAP_FILTER ? 'bg-primary text-white shadow-blue-500/40 scale-110' : 'bg-secondary text-white hover:bg-gray-800'}`}
+                            >
+                                <Icons.Map />
+                            </button>
+                            <span className={`absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] font-bold whitespace-nowrap transition-colors duration-300 ${currentView === View.MAP_FILTER ? 'text-primary opacity-100' : 'text-gray-400 opacity-0'}`}>
+                                الخريطة
+                            </span>
+                        </>
+                     ) : (
+                        <div className="w-10" /> // Spacer if no map permission
+                     )}
                 </div>
-            )}
-            {can('my_activity', 'view') && <MobileNavItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} label="نشاطي" />}
-            {can('users', 'view') && <MobileNavItem active={currentView === View.USERS} onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} label="الأعضاء" />}
+
+                {/* 4. Activity */}
+                {can('my_activity', 'view') && (
+                    <MobileNavItem 
+                        active={currentView === View.MY_ACTIVITY} 
+                        onClick={() => setCurrentView(View.MY_ACTIVITY)} 
+                        icon={<Icons.Check />} 
+                        label="نشاطي" 
+                    />
+                )}
+
+                {/* 5. Team or Profile */}
+                {can('users', 'view') ? (
+                    <MobileNavItem 
+                        active={currentView === View.USERS} 
+                        onClick={() => setCurrentView(View.USERS)} 
+                        icon={<Icons.Users />} 
+                        label="الفريق" 
+                    />
+                ) : (
+                    <MobileNavItem 
+                        active={currentView === View.PROFILE} 
+                        onClick={() => setCurrentView(View.PROFILE)} 
+                        icon={<Icons.User />} 
+                        label="حسابي" 
+                    />
+                )}
+            </div>
         </nav>
       </main>
     </div>
@@ -263,8 +316,11 @@ const SidebarItem = ({ active, onClick, icon, text }: any) => (
 );
 
 const MobileNavItem = ({ active, onClick, icon, label }: any) => (
-    <button onClick={onClick} className={`flex-1 flex flex-col items-center justify-center h-14 space-y-1 ${active ? 'text-primary' : 'text-gray-400'}`}>
-        <span className="[&>svg]:w-6 [&>svg]:h-6">{icon}</span><span className="text-[10px] font-medium">{label}</span>
+    <button onClick={onClick} className={`flex-1 flex flex-col items-center justify-center h-14 space-y-1 transition-all duration-200 group active:scale-95 ${active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}>
+        <div className={`p-1 rounded-xl transition-colors ${active ? 'bg-blue-50' : 'bg-transparent'}`}>
+            <span className="[&>svg]:w-6 [&>svg]:h-6 transition-transform group-hover:-translate-y-0.5">{icon}</span>
+        </div>
+        <span className={`text-[10px] font-medium ${active ? 'font-bold' : ''}`}>{label}</span>
     </button>
 );
 
