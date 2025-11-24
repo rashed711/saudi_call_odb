@@ -219,20 +219,25 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
       // @ts-ignore
       const L = window.L;
       if (mapRef.current && L) {
-          // Add User Marker (Blue Pulse)
+          // Add User Marker (Pulse Animation)
           if (userMarkerRef.current) mapRef.current.removeLayer(userMarkerRef.current);
           
           const userIcon = L.divIcon({
-              className: 'custom-div-icon',
-              html: `<div style="background-color: #2563eb; width: 15px; height: 15px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(37,99,235,0.5);"></div>`,
-              iconSize: [15, 15],
-              iconAnchor: [7, 7]
+              className: 'user-pulse-marker',
+              html: `
+                <div class="user-pulse-container">
+                    <div class="user-pulse-ring"></div>
+                    <div class="user-pulse-core"></div>
+                </div>
+              `,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
           });
 
-          userMarkerRef.current = L.marker([lat, lng], { icon: userIcon }).addTo(mapRef.current);
+          userMarkerRef.current = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(mapRef.current);
           
           // Fly to user
-          mapRef.current.setView([lat, lng], 13);
+          mapRef.current.setView([lat, lng], 14);
           
           // Render result markers
           renderMarkers(topResults);
@@ -246,9 +251,29 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
 
       markersLayerRef.current.clearLayers();
 
-      locs.forEach(loc => {
-          const marker = L.marker([loc.LATITUDE, loc.LONGITUDE])
-            .bindPopup(`<b>${loc.CITYNAME}</b><br/>${loc.ODB_ID}`)
+      locs.forEach((loc, index) => {
+          // Determine color based on index (Nearest is distinctive)
+          const isNearest = index === 0;
+          const colorClass = isNearest ? 'bg-green-600' : 'bg-primary';
+          const iconHtml = `
+            <div class="custom-pin-wrapper group">
+                <div class="pin-shadow"></div>
+                <div class="pin-body ${colorClass} group-hover:-translate-y-2 transition-transform duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="pin-icon"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 6.9 8 11.7z"/></svg>
+                </div>
+            </div>
+          `;
+
+          const customIcon = L.divIcon({
+              className: 'custom-map-pin',
+              html: iconHtml,
+              iconSize: [40, 40],
+              iconAnchor: [20, 40], // Tip of the pin
+              popupAnchor: [0, -40]
+          });
+
+          const marker = L.marker([loc.LATITUDE, loc.LONGITUDE], { icon: customIcon })
+            .bindPopup(`<div style="text-align: center;"><b>${loc.CITYNAME}</b><br/><span style="color: #666; font-size: 10px; font-family: monospace;">${loc.ODB_ID}</span></div>`)
             .on('click', () => handleItemClick(loc));
           
           markersLayerRef.current.addLayer(marker);
@@ -336,6 +361,80 @@ const MapFilter: React.FC<MapFilterProps> = ({ user }) => {
   // --- Render ---
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] md:h-full space-y-3 relative">
+        <style>{`
+            /* User Location Pulse Animation */
+            .user-pulse-container {
+                position: relative;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .user-pulse-core {
+                width: 14px;
+                height: 14px;
+                background-color: #2563eb;
+                border: 2px solid white;
+                border-radius: 50%;
+                box-shadow: 0 0 5px rgba(0,0,0,0.3);
+                position: absolute;
+                z-index: 2;
+            }
+            .user-pulse-ring {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                background-color: rgba(37, 99, 235, 0.4);
+                animation: mapPulse 2s infinite;
+                z-index: 1;
+            }
+            @keyframes mapPulse {
+                0% { transform: scale(0.5); opacity: 0.8; }
+                70% { transform: scale(1.5); opacity: 0; }
+                100% { transform: scale(0.5); opacity: 0; }
+            }
+
+            /* Custom Pin Styles */
+            .custom-pin-wrapper {
+                position: relative;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .pin-body {
+                width: 32px;
+                height: 32px;
+                border-radius: 50% 50% 50% 0;
+                transform: rotate(-45deg);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 2px solid white;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                position: relative;
+                z-index: 10;
+            }
+            .pin-icon {
+                transform: rotate(45deg); /* Counter rotate icon */
+                width: 16px;
+                height: 16px;
+                color: white;
+            }
+            .pin-shadow {
+                width: 12px;
+                height: 4px;
+                background: rgba(0,0,0,0.3);
+                border-radius: 50%;
+                filter: blur(2px);
+                position: absolute;
+                bottom: 2px;
+                z-index: 1;
+            }
+        `}</style>
         
         {/* Floating Controls for Map (Better Mobile UX) */}
         <div className="absolute top-4 left-4 right-4 z-[400] flex justify-between items-start pointer-events-none">
