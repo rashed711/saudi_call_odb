@@ -189,7 +189,16 @@ export const checkSessionStatus = async (userId: number): Promise<void> => {
 
 export const hasPermission = (user: User, resource: string, action: string): boolean => {
     if (!user) return false;
-    if (user.role === 'admin') return true; 
+    
+    // Safety check: ensure permissions array exists
+    if (!user.permissions || !Array.isArray(user.permissions)) {
+        // Fallback for legacy objects: Admins get full access if no specific permissions found
+        if (user.role === 'admin') return true; 
+        return false;
+    }
+
+    // Strict Mode: Always check the permissions array, even for admins.
+    // This allows creating "Limited Admins" by removing specific permissions.
     const resPerm = user.permissions.find(p => p.resource === resource);
     return resPerm ? resPerm.actions.includes(action as any) : false;
 };
