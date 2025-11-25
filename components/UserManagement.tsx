@@ -219,6 +219,12 @@ const UserManagement: React.FC = () => {
   // Logic Check for Self Editing
   const isEditingSelf = currentUser.id === formData.id;
   
+  // Filter resources to hide sensitive ones from non-admins
+  const visibleResources = RESOURCES.filter(res => {
+      if (res.id === 'system_logs' && currentUser.role !== 'admin') return false;
+      return true;
+  });
+
   return (
     <div className="flex flex-col space-y-4 pb-24 md:pb-0">
        
@@ -465,7 +471,7 @@ const UserManagement: React.FC = () => {
                                  <tr><th className="p-2 text-right">القسم</th>{ACTIONS.map(a => <th key={a.id} className="p-2">{a.label}</th>)}</tr>
                              </thead>
                              <tbody>
-                                 {RESOURCES.map(res => (
+                                 {visibleResources.map(res => (
                                      <tr key={res.id} className="border-t border-gray-50 hover:bg-gray-50">
                                          <td className="p-2 text-right font-bold text-gray-700 bg-gray-50/50">{res.label}</td>
                                          {ACTIONS.map(act => {

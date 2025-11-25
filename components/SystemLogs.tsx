@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SystemLog, User } from '../types';
-import { getLogs, clearLogs, hasPermission } from '../services/mockBackend'; // Import hasPermission
+import { getLogs, clearLogs, hasPermission } from '../services/mockBackend'; 
 import { Icons } from './Icons';
 import { PermissionGuard } from './PermissionGuard';
 
@@ -10,22 +10,22 @@ interface Props {
 }
 
 const SystemLogs: React.FC<Props> = ({ user }) => {
+    // Immediate Security Check: Do not render anything if no permission
+    const canView = hasPermission(user, 'system_logs', 'view');
+    
     const [logs, setLogs] = useState<SystemLog[]>([]);
     const [filteredLogs, setFilteredLogs] = useState<SystemLog[]>([]);
     const [search, setSearch] = useState('');
     const [filterAction, setFilterAction] = useState<string>('ALL');
     const [loading, setLoading] = useState(true);
-    const [accessDenied, setAccessDenied] = useState(false);
 
     useEffect(() => {
-        // Security check before fetching
-        if (!hasPermission(user, 'system_logs', 'view')) {
-            setAccessDenied(true);
+        if (canView) {
+            loadLogs();
+        } else {
             setLoading(false);
-            return;
         }
-        loadLogs();
-    }, [user]);
+    }, [user, canView]);
 
     useEffect(() => {
         let res = logs;
@@ -47,7 +47,7 @@ const SystemLogs: React.FC<Props> = ({ user }) => {
         setLoading(true);
         try {
             const data = await getLogs();
-            // Sort by latest (assuming timestamp is ISO string)
+            // Sort by latest
             data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
             setLogs(data);
             setFilteredLogs(data);
@@ -79,11 +79,14 @@ const SystemLogs: React.FC<Props> = ({ user }) => {
         }
     };
 
-    if (accessDenied) {
+    if (!canView) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <Icons.Lock />
-                <h2 className="mt-2 font-bold text-gray-600">عفواً، ليس لديك صلاحية لعرض السجلات</h2>
+                <div className="bg-gray-100 p-4 rounded-full mb-3">
+                    <Icons.Lock />
+                </div>
+                <h2 className="text-lg font-bold text-gray-600">عفواً، ليس لديك صلاحية لعرض سجلات النظام</h2>
+                <p className="text-sm text-gray-400 mt-1">يرجى مراجعة مدير النظام</p>
             </div>
         );
     }
