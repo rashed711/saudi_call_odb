@@ -9,6 +9,7 @@ import UserManagement from './components/UserManagement';
 import MyActivity from './components/MyActivity';
 import MapFilter from './components/MapFilter';
 import SearchODB from './components/SearchODB';
+import SystemLogs from './components/SystemLogs';
 import { Icons } from './components/Icons';
 import { User, View } from './types';
 import { getSession, mockLogout, getSiteSettings, applySiteSettings, hasPermission, refreshUserSession } from './services/mockBackend';
@@ -122,6 +123,8 @@ const App: React.FC = () => {
         return can('users', 'view') ? <UserManagement /> : <AccessDenied />;
       case View.MY_ACTIVITY: 
         return can('my_activity', 'view') ? <MyActivity user={user} /> : <AccessDenied />;
+      case View.SYSTEM_LOGS:
+        return can('system_logs', 'view') ? <SystemLogs user={user} /> : <AccessDenied />;
       case View.DASHBOARD:
       default:
         return (
@@ -143,6 +146,9 @@ const App: React.FC = () => {
             )}
             {can('users', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} color="gray" title="فريق العمل" desc="إدارة الصلاحيات والهيكل" />
+            )}
+            {can('system_logs', 'view') && (
+                <DashboardCard onClick={() => setCurrentView(View.SYSTEM_LOGS)} icon={<Icons.FileText />} color="orange" title="سجلات النظام" desc="تتبع العمليات والأمان" />
             )}
             {can('settings', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Settings />} color="gray" title="النظام" desc="إعدادات التطبيق" />
@@ -169,9 +175,10 @@ const App: React.FC = () => {
           {can('nearby', 'view') && <SidebarItem active={currentView === View.NEARBY} onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} text="الأماكن القريبة (قائمة)" />}
           {can('my_activity', 'view') && <SidebarItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} text="نشاطي" />}
           
-          {(can('users', 'view') || can('settings', 'view')) && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">الإدارة</div>}
+          {(can('users', 'view') || can('settings', 'view') || can('system_logs', 'view')) && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">الإدارة</div>}
           {can('users', 'view') && <SidebarItem active={currentView === View.USERS} onClick={() => setCurrentView(View.USERS)} icon={<Icons.Users />} text="المستخدمين" />}
           {can('odb', 'view') && <SidebarItem active={currentView === View.SETTINGS_ODB} onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} text="كل مواقع ODB" />}
+          {can('system_logs', 'view') && <SidebarItem active={currentView === View.SYSTEM_LOGS} onClick={() => setCurrentView(View.SYSTEM_LOGS)} icon={<Icons.FileText />} text="سجلات النظام" />}
           {can('settings', 'view') && <SidebarItem active={currentView === View.SETTINGS_SITE} onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Settings />} text="إعدادات الموقع" />}
           
           <SidebarItem active={currentView === View.PROFILE} onClick={() => setCurrentView(View.PROFILE)} icon={<Icons.User />} text="حسابي" />
@@ -197,6 +204,7 @@ const App: React.FC = () => {
                 {currentView === View.MAP_FILTER && 'خريطة الأماكن (بحث جغرافي)'}
                 {currentView === View.MY_ACTIVITY && 'سجل نشاطي'}
                 {currentView === View.USERS && 'إدارة الصلاحيات'}
+                {currentView === View.SYSTEM_LOGS && 'سجلات النظام (Logs)'}
                 {currentView === View.SETTINGS_SITE && 'إعدادات الموقع'}
                 {currentView === View.NEARBY && 'الأماكن القريبة'}
                 {currentView === View.PROFILE && 'الملف الشخصي'}

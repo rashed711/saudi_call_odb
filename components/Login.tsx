@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { mockLogin } from '../services/mockBackend';
+import { mockLogin, getDeviceFingerprint } from '../services/mockBackend';
 import { User } from '../types';
 import { Icons } from './Icons';
 
@@ -21,7 +21,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      const user = await mockLogin(username, password);
+      // Get unique device ID (creates one if not exists)
+      const deviceId = getDeviceFingerprint();
+      
+      const user = await mockLogin(username, password, deviceId);
       onLoginSuccess(user);
     } catch (err: any) {
       setError(err.message || 'حدث خطأ ما');

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Permission, PermissionResource, PermissionAction } from '../types';
-import { getUsers, saveUser, deleteUser, toggleUserStatus, getSession, hasPermission } from '../services/mockBackend';
+import { getUsers, saveUser, deleteUser, toggleUserStatus, getSession, hasPermission, resetUserDevice } from '../services/mockBackend';
 import { Icons } from './Icons';
 
 const RESOURCES: { id: PermissionResource; label: string }[] = [
@@ -13,6 +13,7 @@ const RESOURCES: { id: PermissionResource; label: string }[] = [
   { id: 'users', label: 'المستخدمين' },
   { id: 'settings', label: 'الإعدادات' },
   { id: 'my_activity', label: 'نشاطي (للمناديب)' },
+  { id: 'system_logs', label: 'سجلات النظام (Audit)' },
 ];
 
 const ACTIONS: { id: PermissionAction; label: string }[] = [
@@ -36,7 +37,7 @@ const UserManagement: React.FC = () => {
 
   // Form State
   const [formData, setFormData] = useState<Partial<User>>({
-      id: 0, username: '', name: '', email: '', role: 'delegate', password: '', isActive: true, permissions: [], supervisorId: null
+      id: 0, username: '', name: '', email: '', role: 'delegate', password: '', isActive: true, permissions: [], supervisorId: null, deviceId: null
   });
 
   useEffect(() => {
@@ -67,7 +68,7 @@ const UserManagement: React.FC = () => {
           
           setFormData({
               id: 0, username: '', name: '', email: '', role: defaultRole,
-              password: '', isActive: true, supervisorId: defaultSupervisor, permissions: []
+              password: '', isActive: true, supervisorId: defaultSupervisor, permissions: [], deviceId: null
           });
           handleRoleChange(defaultRole, true);
       }
@@ -170,6 +171,20 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const handleResetDevice = async () => {
+      if (!formData.id) return;
+      if (window.confirm('سيتم فك ارتباط الجهاز الحالي بهذا الحساب والسماح له بالدخول من جهاز جديد. هل أنت متأكد؟')) {
+          try {
+              await resetUserDevice(formData.id);
+              setFormData(prev => ({ ...prev, deviceId: null }));
+              loadData();
+              alert('تم فك ارتباط الجهاز بنجاح.');
+          } catch (error: any) {
+              setModalError('فشل في فك الارتباط: ' + error.message);
+          }
+      }
+  }
+
   const isPermitted = (resource: string, action: string) => {
       const p = formData.permissions?.find(x => x.resource === resource);
       return p?.actions.includes(action as any);
@@ -247,6 +262,7 @@ const UserManagement: React.FC = () => {
                             <th className="px-6 py-3">الموظف</th>
                             <th className="px-6 py-3">الدور الوظيفي</th>
                             <th className="px-6 py-3">المدير المباشر</th>
+                            <th className="px-6 py-3 text-center">الجهاز</th>
                             <th className="px-6 py-3 text-center">الحالة</th>
                         </tr>
                     </thead>
@@ -273,6 +289,13 @@ const UserManagement: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-xs font-medium text-gray-500">{user.supervisorId ? users.find(u => u.id === user.supervisorId)?.name : '-'}</td>
+                                <td className="px-6 py-4 text-center">
+                                    {user.deviceId ? (
+                                        <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100 font-bold">مرتبط</span>
+                                    ) : (
+                                        <span className="text-[10px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full font-bold">غير مرتبط</span>
+                                    )}
+                                </td>
                                 <td className="px-6 py-4 text-center">
                                     <span className={`inline-block w-2.5 h-2.5 rounded-full ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`}></span>
                                 </td>
@@ -313,6 +336,7 @@ const UserManagement: React.FC = () => {
                              }`}>
                                  {user.role === 'admin' ? 'مدير' : user.role === 'supervisor' ? 'مشرف' : 'مندوب'}
                              </span>
+                             {user.deviceId && <div className="text-[10px] text-green-600 bg-green-50 px-1 rounded"><Icons.Smartphone /></div>}
                          </div>
                      </div>
 
@@ -353,6 +377,31 @@ const UserManagement: React.FC = () => {
                             <span className="font-bold block">حماية الصلاحيات</span>
                             <span className="opacity-80 text-xs">لا يمكنك تعديل صلاحياتك أو دورك الوظيفي بنفسك. يرجى التواصل مع مدير آخر إذا تطلب الأمر.</span>
                         </div>
+                    </div>
+                )}
+
+                {/* إدارة ربط الجهاز */}
+                {formData.id && (
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-full ${formData.deviceId ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}`}>
+                                <Icons.Smartphone />
+                            </div>
+                            <div>
+                                <span className="font-bold block text-sm text-gray-800">حالة الجهاز</span>
+                                <span className={`text-xs ${formData.deviceId ? 'text-green-600 font-bold' : 'text-gray-500'}`}>
+                                    {formData.deviceId ? 'الحساب مرتبط بجهاز حالياً' : 'لا يوجد جهاز مرتبط'}
+                                </span>
+                            </div>
+                        </div>
+                        {formData.deviceId && !isEditingSelf && (
+                            <button 
+                                onClick={handleResetDevice}
+                                className="text-xs bg-red-50 text-red-600 border border-red-100 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 flex items-center gap-1"
+                            >
+                                <Icons.Unlink /> فك الارتباط
+                            </button>
+                        )}
                     </div>
                 )}
 

@@ -1,8 +1,10 @@
 
-import { ODBLocation, User, SiteSettings, NearbyLocation, Permission } from '../types';
+import { ODBLocation, User, SiteSettings, NearbyLocation, Permission, SystemLog } from '../types';
 
 const API_BASE_URL = 'https://start.enjaz.cloud/api/api.php'; 
 const STORAGE_KEY_USER_SESSION = 'odb_user_session_v3_perm';
+const STORAGE_KEY_DEVICE_ID = 'odb_device_id_fingerprint';
+// const STORAGE_KEY_LOGS = 'odb_system_logs'; // No longer used
 
 // --- DEFAULT PERMISSIONS TEMPLATES ---
 const ADMIN_PERMISSIONS: Permission[] = [
@@ -12,27 +14,30 @@ const ADMIN_PERMISSIONS: Permission[] = [
     { resource: 'users', actions: ['view', 'create', 'edit', 'delete'] },
     { resource: 'settings', actions: ['view', 'edit'] },
     { resource: 'my_activity', actions: ['view'] },
-    { resource: 'map_filter', actions: ['view'] },
-    { resource: 'search_odb', actions: ['view', 'edit'] } // Added edit here
+    { resource: 'map_filter', actions: ['view', 'create', 'edit', 'delete', 'export'] }, 
+    { resource: 'search_odb', actions: ['view', 'edit'] },
+    { resource: 'system_logs', actions: ['view', 'delete', 'export'] } // Admin only by default
 ];
 
 const SUPERVISOR_PERMISSIONS: Permission[] = [
     { resource: 'dashboard', actions: ['view'] },
-    { resource: 'odb', actions: ['view', 'create', 'edit'] }, // No delete
+    { resource: 'odb', actions: ['view', 'create', 'edit'] }, 
     { resource: 'nearby', actions: ['view'] },
-    { resource: 'users', actions: ['view', 'create', 'edit'] }, // Manage their delegates only
+    { resource: 'users', actions: ['view', 'create', 'edit'] }, 
     { resource: 'my_activity', actions: ['view'] },
     { resource: 'map_filter', actions: ['view'] },
-    { resource: 'search_odb', actions: ['view'] }
+    { resource: 'search_odb', actions: ['view'] },
+    { resource: 'system_logs', actions: [] }
 ];
 
 const DELEGATE_PERMISSIONS: Permission[] = [
     { resource: 'dashboard', actions: ['view'] },
-    { resource: 'odb', actions: ['view'] }, // View only global list
+    { resource: 'odb', actions: ['view'] }, 
     { resource: 'nearby', actions: ['view'] },
-    { resource: 'my_activity', actions: ['view', 'edit'] }, // Can edit their own work
+    { resource: 'my_activity', actions: ['view', 'edit'] }, 
     { resource: 'map_filter', actions: ['view'] },
-    { resource: 'search_odb', actions: ['view'] }
+    { resource: 'search_odb', actions: ['view'] },
+    { resource: 'system_logs', actions: [] }
 ];
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -41,7 +46,43 @@ const DEFAULT_SETTINGS: SiteSettings = {
     secondaryColor: '#1e293b',
     accentColor: '#3b82f6',
     searchRadius: 50,
-    maxResults: 20 // Updated to 20 per user request
+    maxResults: 20 
+};
+
+// --- SYSTEM LOGGING (CONNECTED TO API) ---
+export const getLogs = async (): Promise<SystemLog[]> => {
+    try {
+        const result = await apiRequest('get_logs', 'GET', null, undefined, true);
+        return Array.isArray(result) ? result : [];
+    } catch (e) {
+        console.error("Failed to fetch logs:", e);
+        return [];
+    }
+};
+
+export const logAction = (username: string, action: SystemLog['action'], resource: string, details: string) => {
+     const payload = {
+        username: username || 'Unknown',
+        action,
+        resource,
+        details
+    };
+    // Send to server without blocking UI (Fire and Forget)
+    apiRequest('log_action', 'POST', payload, undefined, true).catch(e => {
+        // Enhanced Debugging
+        console.group("System Log Failed");
+        console.error("Payload:", payload);
+        console.error("Error:", e);
+        console.groupEnd();
+    });
+};
+
+export const clearLogs = async (olderThanDays?: number): Promise<void> => {
+    await apiRequest('clear_logs', 'GET');
+    const user = getSession();
+    if(user) {
+        logAction(user.username, 'DELETE', 'System', 'Cleared all system logs');
+    }
 };
 
 // --- HELPER ---
@@ -64,7 +105,6 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
             data = JSON.parse(text); 
         } catch (e) { 
             if (response.ok) {
-                 console.error("Non-JSON Response from Server:", text);
                  if (text.includes("Fatal error") || text.includes("Parse error")) {
                     throw new Error("خطأ برمجي في السيرفر (PHP Error).");
                  }
@@ -73,9 +113,7 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
         }
 
         if (!response.ok) {
-            if (data && data.error) {
-                throw new Error(data.error);
-            }
+            if (data && data.error) throw new Error(data.error);
             const cleanText = text ? text.replace(/<[^>]+>/g, '').trim().substring(0, 150) : response.statusText;
             throw new Error(`Server Error (${response.status}): ${cleanText}`);
         }
@@ -94,9 +132,8 @@ async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: 
 }
 
 // --- UTILS ---
-// Haversine formula to calculate distance in KM
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Radius of the earth in km
+    const R = 6371; 
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
     const a = 
@@ -104,7 +141,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
         Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
         Math.sin(dLon/2) * Math.sin(dLon/2); 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-    const d = R * c; // Distance in km
+    const d = R * c; 
     return d;
 }
 
@@ -112,29 +149,84 @@ function deg2rad(deg: number): number {
     return deg * (Math.PI/180);
 }
 
+// --- DEVICE FINGERPRINT UTILS ---
+export const getDeviceFingerprint = (): string => {
+    let deviceId = localStorage.getItem(STORAGE_KEY_DEVICE_ID);
+    if (!deviceId) {
+        deviceId = 'dev_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem(STORAGE_KEY_DEVICE_ID, deviceId);
+    }
+    return deviceId;
+};
+
 // --- AUTH & PERMISSIONS ---
-export const mockLogin = async (username: string, pass: string): Promise<User> => {
-    const user = await apiRequest('login', 'POST', { username, password: pass });
+export const mockLogin = async (username: string, pass: string, deviceId?: string): Promise<User> => {
+    const finalDeviceId = deviceId || getDeviceFingerprint();
     
-    let finalUser = { ...user };
-    if (typeof finalUser.permissions === 'string') {
-        try { finalUser.permissions = JSON.parse(finalUser.permissions); } catch(e) { finalUser.permissions = null; }
-    }
-
-    if (!finalUser.permissions || !Array.isArray(finalUser.permissions)) {
-        if (finalUser.role === 'admin') finalUser.permissions = ADMIN_PERMISSIONS;
-        else if (finalUser.role === 'supervisor') finalUser.permissions = SUPERVISOR_PERMISSIONS;
-        else finalUser.permissions = DELEGATE_PERMISSIONS;
-    }
+    const payload = { username, password: pass, deviceId: finalDeviceId };
     
-    finalUser.id = Number(finalUser.id);
-    finalUser.supervisorId = finalUser.supervisorId ? Number(finalUser.supervisorId) : null;
+    try {
+        const user = await apiRequest('login', 'POST', payload);
+        
+        let finalUser = { ...user };
+        if (typeof finalUser.permissions === 'string') {
+            try { finalUser.permissions = JSON.parse(finalUser.permissions); } catch(e) { finalUser.permissions = null; }
+        }
 
-    localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(finalUser));
-    return finalUser as User;
+        if (!finalUser.permissions || !Array.isArray(finalUser.permissions)) {
+            if (finalUser.role === 'admin') finalUser.permissions = ADMIN_PERMISSIONS;
+            else if (finalUser.role === 'supervisor') finalUser.permissions = SUPERVISOR_PERMISSIONS;
+            else finalUser.permissions = DELEGATE_PERMISSIONS;
+        }
+        
+        finalUser.id = Number(finalUser.id);
+        finalUser.supervisorId = finalUser.supervisorId ? Number(finalUser.supervisorId) : null;
+
+        if (finalUser.deviceId) {
+            if (finalUser.deviceId !== finalDeviceId) {
+                logAction(username, 'SECURITY', 'Auth', `Failed login attempt from unregistered device: ${finalDeviceId}`);
+                throw new Error("هذا الحساب مرتبط بجهاز آخر. لا يمكنك تسجيل الدخول من هذا الجهاز. يرجى التواصل مع المدير.");
+            }
+        } else {
+            try {
+                await bindUserDevice(finalUser.id, finalDeviceId);
+                finalUser.deviceId = finalDeviceId;
+                logAction(username, 'SECURITY', 'Device', 'First time device binding successful');
+            } catch (e) {
+                console.error("Failed to bind device", e);
+            }
+        }
+
+        localStorage.setItem(STORAGE_KEY_USER_SESSION, JSON.stringify(finalUser));
+        
+        // Log Success
+        logAction(username, 'LOGIN', 'System', 'User logged in successfully');
+        
+        return finalUser as User;
+    } catch (e: any) {
+        // Log Failure if not a device error (to avoid spamming from valid users on wrong devices)
+        if (!e.message.includes('مرتبط بجهاز')) {
+            logAction(username, 'ERROR', 'Auth', `Login failed: ${e.message}`);
+        }
+        throw e;
+    }
+};
+
+export const bindUserDevice = async (userId: number, deviceId: string): Promise<void> => {
+    await apiRequest(`bind_device&id=${userId}&deviceId=${deviceId}`, 'GET', null, undefined, true);
+};
+
+export const resetUserDevice = async (id: number): Promise<void> => {
+    await apiRequest(`reset_user_device&id=${id}`, 'GET');
+    const currentUser = getSession();
+    logAction(currentUser?.username || 'System', 'SECURITY', 'User', `Reset device binding for User ID: ${id}`);
 };
 
 export const mockLogout = () => {
+  const user = getSession();
+  if (user) {
+      logAction(user.username, 'LOGOUT', 'System', 'User logged out');
+  }
   localStorage.removeItem(STORAGE_KEY_USER_SESSION);
 };
 
@@ -143,11 +235,9 @@ export const getSession = (): User | null => {
   return data ? JSON.parse(data) : null;
 };
 
-// New function to support Real-Time Permission Updates
 export const refreshUserSession = async (userId: number): Promise<User | null> => {
     try {
-        // Fetch all users to find the specific one (Simulating 'get_me' since backend might not have it)
-        const allUsers = await apiRequest('get_users', 'GET', null, undefined, true); // silent request
+        const allUsers = await apiRequest('get_users', 'GET', null, undefined, true); 
         const rawUser = allUsers.find((u: any) => Number(u.id) === userId);
         
         if (!rawUser) return null;
@@ -171,11 +261,10 @@ export const refreshUserSession = async (userId: number): Promise<User | null> =
             role: rawUser.role,
             supervisorId: rawUser.supervisorId ? Number(rawUser.supervisorId) : null,
             isActive: rawUser.isActive == 1 || rawUser.isActive === true,
-            permissions: permissions
+            permissions: permissions,
+            deviceId: rawUser.deviceId || null
         };
         
-        // Note: We don't automatically update localStorage here to allow the App to decide when to re-render,
-        // but we return the fresh object.
         return freshUser;
 
     } catch (e) {
@@ -183,22 +272,17 @@ export const refreshUserSession = async (userId: number): Promise<User | null> =
     }
 };
 
-export const checkSessionStatus = async (userId: number): Promise<void> => {
-    await apiRequest(`check_session&id=${userId}`, 'GET', null, undefined, true);
-};
-
 export const hasPermission = (user: User, resource: string, action: string): boolean => {
     if (!user) return false;
     
-    // Safety check: ensure permissions array exists
+    // Explicit Admin Override
+    if (user.role === 'admin' && (resource === 'map_filter' || resource === 'system_logs')) return true;
+
     if (!user.permissions || !Array.isArray(user.permissions)) {
-        // Fallback for legacy objects: Admins get full access if no specific permissions found
         if (user.role === 'admin') return true; 
         return false;
     }
 
-    // Strict Mode: Always check the permissions array, even for admins.
-    // This allows creating "Limited Admins" by removing specific permissions.
     const resPerm = user.permissions.find(p => p.resource === resource);
     return resPerm ? resPerm.actions.includes(action as any) : false;
 };
@@ -211,7 +295,8 @@ export const getUsers = async (currentUser: User): Promise<User[]> => {
         id: Number(u.id),
         supervisorId: u.supervisorId ? Number(u.supervisorId) : null,
         isActive: u.isActive == 1 || u.isActive === true,
-        permissions: u.permissions ? (typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions) : (u.role === 'admin' ? ADMIN_PERMISSIONS : (u.role === 'supervisor' ? SUPERVISOR_PERMISSIONS : DELEGATE_PERMISSIONS))
+        permissions: u.permissions ? (typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions) : (u.role === 'admin' ? ADMIN_PERMISSIONS : (u.role === 'supervisor' ? SUPERVISOR_PERMISSIONS : DELEGATE_PERMISSIONS)),
+        deviceId: u.deviceId || null
     }));
 
     if (currentUser.role === 'supervisor') {
@@ -223,21 +308,89 @@ export const getUsers = async (currentUser: User): Promise<User[]> => {
 };
 
 export const saveUser = async (userToSave: User): Promise<void> => {
+    const userSession = getSession();
+    let logDetails = '';
+    const isUpdate = userToSave.id && userToSave.id !== 0;
+
+    if (isUpdate && userSession) {
+        try {
+            // Fetch current state of users to compare
+            // In a real app we might want a specific endpoint, but reuse get_users for now as per existing pattern
+            const allUsers = await apiRequest('get_users');
+            const oldUser = allUsers.find((u: any) => Number(u.id) === userToSave.id);
+
+            if (oldUser) {
+                const changes: string[] = [];
+                
+                if (oldUser.name !== userToSave.name) changes.push(`Name: '${oldUser.name}' -> '${userToSave.name}'`);
+                if (oldUser.email !== userToSave.email) changes.push(`Email: '${oldUser.email}' -> '${userToSave.email}'`);
+                if (oldUser.role !== userToSave.role) changes.push(`Role: '${oldUser.role}' -> '${userToSave.role}'`);
+                
+                const oldActive = oldUser.isActive == 1 || oldUser.isActive === true;
+                const newActive = userToSave.isActive; // Corrected: userToSave is typed User, isActive is boolean
+                if (oldActive !== newActive) changes.push(`Status: '${oldActive ? 'Active' : 'Inactive'}' -> '${newActive ? 'Active' : 'Inactive'}'`);
+                
+                if (userToSave.password) changes.push(`Password changed`);
+                
+                // Compare permissions roughly
+                const oldPerms = typeof oldUser.permissions === 'string' ? oldUser.permissions : JSON.stringify(oldUser.permissions);
+                const newPerms = typeof userToSave.permissions === 'string' ? userToSave.permissions : JSON.stringify(userToSave.permissions);
+                if (oldPerms !== newPerms) {
+                    changes.push(`Permissions updated`);
+                }
+                
+                const oldSup = oldUser.supervisorId || 'None';
+                const newSup = userToSave.supervisorId || 'None';
+                if (oldSup != newSup) {
+                    changes.push(`Supervisor ID: ${oldSup} -> ${newSup}`);
+                }
+
+                if (changes.length > 0) {
+                    logDetails = `Updated user ${userToSave.username}: ` + changes.join(', ');
+                } else {
+                    logDetails = `Updated user ${userToSave.username} (No changes detected)`;
+                }
+            } else {
+                 logDetails = `Updated user ${userToSave.username}`;
+            }
+        } catch (e) {
+            logDetails = `Updated user ${userToSave.username} (Diff failed)`;
+        }
+    } else {
+        logDetails = `Created new user: ${userToSave.username} (${userToSave.role})`;
+    }
+
     const payload = { ...userToSave, permissions: userToSave.permissions };
     await apiRequest('save_user', 'POST', payload);
+    
+    logAction(userSession?.username || 'System', isUpdate ? 'UPDATE' : 'CREATE', 'User', logDetails);
 };
 
 export const deleteUser = async (id: number): Promise<void> => {
+    // Optionally fetch user name before delete for better logs
+    let username = `ID ${id}`;
+    try {
+        const userSession = getSession();
+        if (userSession) {
+             const currentUsers = await getUsers(userSession);
+             const u = currentUsers.find(x => x.id === id);
+             if (u) username = `${u.username} (ID: ${id})`;
+        }
+    } catch(e) {}
+
     await apiRequest(`delete_user&id=${id}`, 'GET');
+    const currentUser = getSession();
+    logAction(currentUser?.username || 'System', 'DELETE', 'User', `Deleted user: ${username}`);
 };
 
 export const toggleUserStatus = async (id: number): Promise<void> => {
+    // Fetch status before toggle to log accurately? Or just log the action.
     await apiRequest(`toggle_user_status&id=${id}`, 'GET');
+    const currentUser = getSession();
+    logAction(currentUser?.username || 'System', 'UPDATE', 'User', `Toggled active status for user ID: ${id}`);
 };
 
-// --- LOCATIONS & ACTIVITY (OPTIMIZED) ---
-
-// 1. Get List (LIGHTWEIGHT - No Images)
+// --- LOCATIONS & ACTIVITY ---
 export const getODBLocationsPaginated = async (page: number, limit: number, search: string = '', signal?: AbortSignal): Promise<{data: ODBLocation[], total: number, totalPages: number}> => {
     try {
         const result = await apiRequest(`get_locations_paginated&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`, 'GET', null, signal);
@@ -261,9 +414,7 @@ export const getODBLocationsPaginated = async (page: number, limit: number, sear
     }
 };
 
-// Specialized Search Function (Optimized for single result)
 export const searchODBLocation = async (query: string): Promise<ODBLocation[]> => {
-    // We reuse the paginated endpoint but limit to 5 results to keep it fast
     const result = await getODBLocationsPaginated(1, 5, query);
     return result.data;
 };
@@ -334,22 +485,16 @@ export const getMyActivity = async (username: string, page: number = 1, limit: n
 
 export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: number, limit: number): Promise<NearbyLocation[]> => {
     const effectiveRadius = radius === 0 ? 50000 : radius;
-    // We request more from the server if possible, then filter accurately on client to be safe
-    // But since this is a proxy, we trust the server first.
     let data = await apiRequest(`get_nearby_locations&lat=${lat}&lng=${lng}&radius=${effectiveRadius}&limit=${limit}`, 'GET');
     
     if (!Array.isArray(data)) {
-        // Fallback: If backend returns object or error, try fetching all and sorting client-side (Emergency mode)
-        // For now, return empty array to prevent crash
         return [];
     }
 
-    // MAP AND ENSURE DISTANCE
     let mappedLocations = data.map((loc: any) => {
         const lLat = Number(loc.LATITUDE || loc.latitude);
         const lLng = Number(loc.LONGITUDE || loc.longitude);
         
-        // If API didn't return distance, calculate it
         let dist = loc.distance ? Number(loc.distance) : calculateDistance(lat, lng, lLat, lLng);
 
         return {
@@ -369,10 +514,8 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
         };
     });
 
-    // Client-side sort to guarantee "Nearest 20"
     mappedLocations.sort((a, b) => a.distance - b.distance);
 
-    // Enforce limit if API didn't
     if (limit > 0) {
         mappedLocations = mappedLocations.slice(0, limit);
     }
@@ -380,22 +523,20 @@ export const getNearbyLocationsAPI = async (lat: number, lng: number, radius: nu
     return mappedLocations;
 };
 
-// Updated Save Function with Logic Logic
 export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
     const userSession = getSession();
     
-    // Logic for Ownership & Locking
     let finalLocation = { ...location };
+    let isNew = false;
 
-    // Case 1: New Location -> Assign to current user and lock it
     if (!finalLocation.id || finalLocation.id === 0) {
+        isNew = true;
         if (userSession) {
             finalLocation.ownerId = userSession.id;
             finalLocation.ownerName = userSession.name;
         }
         finalLocation.isLocked = true;
     } 
-    // Case 2: Existing location without owner (Claiming) -> Assign and lock
     else if (!finalLocation.ownerId && userSession && userSession.role === 'delegate') {
         finalLocation.ownerId = userSession.id;
         finalLocation.ownerName = userSession.name;
@@ -406,21 +547,26 @@ export const saveODBLocation = async (location: ODBLocation): Promise<void> => {
         ...finalLocation,
         last_edited_by: finalLocation.lastEditedBy,
         last_edited_at: finalLocation.lastEditedAt,
-        // Send these explicitly as snake_case if backend expects it, or just rely on spread
         ownerId: finalLocation.ownerId,
         ownerName: finalLocation.ownerName,
         isLocked: finalLocation.isLocked
     };
     await apiRequest('save_location', 'POST', payload);
+
+    logAction(userSession?.username || 'System', isNew ? 'CREATE' : 'UPDATE', 'Location', `${isNew ? 'Created' : 'Updated'} ODB Location: ${finalLocation.CITYNAME} (${finalLocation.ODB_ID})`);
 };
 
 export const saveBulkODBLocations = async (locations: Omit<ODBLocation, 'id'>[]): Promise<{success: boolean, added: number, skipped: number}> => {
     const result = await apiRequest('save_bulk_locations', 'POST', { locations });
+    const userSession = getSession();
+    logAction(userSession?.username || 'System', 'EXPORT', 'Location', `Bulk imported ${result.added} locations`);
     return result; 
 };
 
 export const deleteODBLocation = async (id: number): Promise<void> => {
     await apiRequest(`delete_location&id=${id}`, 'GET');
+    const userSession = getSession();
+    logAction(userSession?.username || 'System', 'DELETE', 'Location', `Deleted ODB Location ID: ${id}`);
 };
 
 // --- SITE SETTINGS ---
@@ -436,6 +582,8 @@ export const getSiteSettings = async (): Promise<SiteSettings> => {
 export const saveSiteSettings = async (settings: SiteSettings): Promise<void> => {
     await apiRequest('save_settings', 'POST', settings);
     applySiteSettings(settings);
+    const userSession = getSession();
+    logAction(userSession?.username || 'System', 'UPDATE', 'Settings', 'Updated global site settings');
 };
 
 export const applySiteSettings = (settings: SiteSettings) => {
