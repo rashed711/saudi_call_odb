@@ -16,7 +16,7 @@ const ADMIN_PERMISSIONS: Permission[] = [
     { resource: 'my_activity', actions: ['view'] },
     { resource: 'map_filter', actions: ['view', 'create', 'edit', 'delete', 'export'] }, 
     { resource: 'search_odb', actions: ['view', 'edit'] },
-    { resource: 'system_logs', actions: ['view', 'delete', 'export'] } // Admin only by default
+    { resource: 'system_logs', actions: ['view', 'delete', 'export'] }
 ];
 
 const SUPERVISOR_PERMISSIONS: Permission[] = [
@@ -173,10 +173,17 @@ export const mockLogin = async (username: string, pass: string, deviceId?: strin
             try { finalUser.permissions = JSON.parse(finalUser.permissions); } catch(e) { finalUser.permissions = null; }
         }
 
+        // Apply defaults ONLY if permissions are missing.
         if (!finalUser.permissions || !Array.isArray(finalUser.permissions)) {
             if (finalUser.role === 'admin') finalUser.permissions = ADMIN_PERMISSIONS;
             else if (finalUser.role === 'supervisor') finalUser.permissions = SUPERVISOR_PERMISSIONS;
             else finalUser.permissions = DELEGATE_PERMISSIONS;
+        }
+        
+        // Ensure Super Admin has all permissions visually in state (though logic overrides)
+        if (finalUser.username === 'admin') {
+            finalUser.permissions = ADMIN_PERMISSIONS;
+            finalUser.role = 'admin';
         }
         
         finalUser.id = Number(finalUser.id);
@@ -265,6 +272,13 @@ export const refreshUserSession = async (userId: number): Promise<User | null> =
             deviceId: rawUser.deviceId || null
         };
         
+        // Ensure Super Admin always has consistent state
+        if (freshUser.username === 'admin') {
+            freshUser.permissions = ADMIN_PERMISSIONS;
+            freshUser.role = 'admin';
+            freshUser.isActive = true; // Cannot be deactivated
+        }
+        
         return freshUser;
 
     } catch (e) {
@@ -275,11 +289,13 @@ export const refreshUserSession = async (userId: number): Promise<User | null> =
 export const hasPermission = (user: User, resource: string, action: string): boolean => {
     if (!user) return false;
     
-    // Explicit Admin Override
-    if (user.role === 'admin' && (resource === 'map_filter' || resource === 'system_logs')) return true;
+    // ----------------------------------------------------------------
+    // SUPER ADMIN BYPASS: The user 'admin' has absolute power
+    // ----------------------------------------------------------------
+    if (user.username === 'admin') return true;
 
+    // For everyone else (even other 'admins'), check the permissions array
     if (!user.permissions || !Array.isArray(user.permissions)) {
-        if (user.role === 'admin') return true; 
         return false;
     }
 
@@ -312,6 +328,14 @@ export const saveUser = async (userToSave: User): Promise<void> => {
     let logDetails = '';
     const isUpdate = userToSave.id && userToSave.id !== 0;
 
+    // PROTECTION: Cannot change role of Super Admin via normal save
+    if (userToSave.username === 'admin' && userToSave.role !== 'admin') {
+        throw new Error("لا يمكن تغيير صلاحية الحساب الرئيسي (Super Admin)");
+    }
+    if (userToSave.username === 'admin' && userToSave.isActive === false) {
+        throw new Error("لا يمكن إيقاف الحساب الرئيسي (Super Admin)");
+    }
+
     if (isUpdate && userSession) {
         try {
             // Fetch current state of users to compare
@@ -327,7 +351,7 @@ export const saveUser = async (userToSave: User): Promise<void> => {
                 if (oldUser.role !== userToSave.role) changes.push(`Role: '${oldUser.role}' -> '${userToSave.role}'`);
                 
                 const oldActive = oldUser.isActive == 1 || oldUser.isActive === true;
-                const newActive = userToSave.isActive; // Corrected: userToSave is typed User, isActive is boolean
+                const newActive = userToSave.isActive; 
                 if (oldActive !== newActive) changes.push(`Status: '${oldActive ? 'Active' : 'Inactive'}' -> '${newActive ? 'Active' : 'Inactive'}'`);
                 
                 if (userToSave.password) changes.push(`Password changed`);
@@ -369,14 +393,21 @@ export const saveUser = async (userToSave: User): Promise<void> => {
 export const deleteUser = async (id: number): Promise<void> => {
     // Optionally fetch user name before delete for better logs
     let username = `ID ${id}`;
+    let userToDelete = null;
+
     try {
         const userSession = getSession();
         if (userSession) {
              const currentUsers = await getUsers(userSession);
-             const u = currentUsers.find(x => x.id === id);
-             if (u) username = `${u.username} (ID: ${id})`;
+             userToDelete = currentUsers.find(x => x.id === id);
+             if (userToDelete) username = `${userToDelete.username} (ID: ${id})`;
         }
     } catch(e) {}
+
+    // Protection: Cannot delete Super Admin
+    if (userToDelete && userToDelete.username === 'admin') {
+        throw new Error("لا يمكن حذف الحساب الرئيسي (Super Admin)");
+    }
 
     await apiRequest(`delete_user&id=${id}`, 'GET');
     const currentUser = getSession();
@@ -384,7 +415,20 @@ export const deleteUser = async (id: number): Promise<void> => {
 };
 
 export const toggleUserStatus = async (id: number): Promise<void> => {
-    // Fetch status before toggle to log accurately? Or just log the action.
+     // Protection check
+     try {
+        const userSession = getSession();
+        if (userSession) {
+             const currentUsers = await getUsers(userSession);
+             const u = currentUsers.find(x => x.id === id);
+             if (u && u.username === 'admin') {
+                 throw new Error("لا يمكن إيقاف الحساب الرئيسي");
+             }
+        }
+    } catch(e) {
+        if (e instanceof Error && e.message.includes("لا يمكن")) throw e;
+    }
+
     await apiRequest(`toggle_user_status&id=${id}`, 'GET');
     const currentUser = getSession();
     logAction(currentUser?.username || 'System', 'UPDATE', 'User', `Toggled active status for user ID: ${id}`);

@@ -149,6 +149,10 @@ const UserManagement: React.FC = () => {
 
   const handleDelete = async () => {
       if (!formData.id) return;
+      if (formData.username === 'admin') {
+          setModalError("لا يمكن حذف الحساب الرئيسي (Super Admin)");
+          return;
+      }
       if (window.confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟')) {
           try {
             await deleteUser(formData.id);
@@ -162,6 +166,10 @@ const UserManagement: React.FC = () => {
 
   const handleToggleStatus = async () => {
     if (!formData.id) return;
+    if (formData.username === 'admin') {
+        setModalError("لا يمكن إيقاف الحساب الرئيسي (Super Admin)");
+        return;
+    }
     try {
         await toggleUserStatus(formData.id);
         setFormData(prev => ({ ...prev, isActive: !prev.isActive }));
@@ -191,9 +199,16 @@ const UserManagement: React.FC = () => {
   };
 
   const isPermissionDisabled = (resource: string, action: string) => {
+      // If the target user is the super admin, permissions are always enabled (but not editable)
+      if (formData.username === 'admin') return true;
+
+      // If current user is Admin (but not editing super admin), they can edit permissions
       if (currentUser?.role === 'admin') return false;
+      
       return !hasPermission(currentUser!, resource, action);
   };
+
+  const isSuperAdmin = (u: User | Partial<User>) => u.username === 'admin';
 
   if (!currentUser) return <div>Access Denied</div>;
 
@@ -218,6 +233,7 @@ const UserManagement: React.FC = () => {
 
   // Logic Check for Self Editing
   const isEditingSelf = currentUser.id === formData.id;
+  const isTargetSuperAdmin = isSuperAdmin(formData);
   
   // Filter resources to hide sensitive ones from non-admins
   const visibleResources = RESOURCES.filter(res => {
@@ -274,13 +290,15 @@ const UserManagement: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                          {users.map((user, index) => (
-                            <tr key={user.id} onClick={() => handleOpenModal(user)} className="hover:bg-blue-50 cursor-pointer transition-colors group">
+                            <tr key={user.id} onClick={() => handleOpenModal(user)} className={`hover:bg-blue-50 cursor-pointer transition-colors group ${isSuperAdmin(user) ? 'bg-yellow-50/50' : ''}`}>
                                 <td className="px-4 py-4 text-center text-gray-400 font-mono text-xs">{index + 1}</td>
                                 <td className="px-6 py-4 flex items-center gap-3">
                                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm ${user.role === 'admin' ? 'bg-gray-800' : user.role === 'supervisor' ? 'bg-purple-600' : 'bg-blue-500'}`}>{user.name.charAt(0)}</div>
                                     <div>
-                                        <div className="font-bold text-sm text-gray-800 group-hover:text-primary transition-colors">
-                                            {user.name} {user.id === currentUser.id && <span className="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">(أنت)</span>}
+                                        <div className="font-bold text-sm text-gray-800 group-hover:text-primary transition-colors flex items-center gap-2">
+                                            {user.name} 
+                                            {isSuperAdmin(user) && <Icons.Shield />}
+                                            {user.id === currentUser.id && <span className="text-[10px] text-gray-400 bg-gray-100 px-1 rounded">(أنت)</span>}
                                         </div>
                                         <div className="text-xs text-gray-400 font-mono">@{user.username}</div>
                                     </div>
@@ -291,7 +309,7 @@ const UserManagement: React.FC = () => {
                                         user.role === 'supervisor' ? 'bg-purple-50 text-purple-700 border-purple-100' : 
                                         'bg-blue-50 text-blue-700 border-blue-100'
                                     }`}>
-                                        {user.role === 'admin' ? 'مدير نظام' : user.role === 'supervisor' ? 'مشرف منطقة' : 'مندوب ميداني'}
+                                        {isSuperAdmin(user) ? 'Super Admin' : (user.role === 'admin' ? 'مدير نظام' : user.role === 'supervisor' ? 'مشرف منطقة' : 'مندوب ميداني')}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-xs font-medium text-gray-500">{user.supervisorId ? users.find(u => u.id === user.supervisorId)?.name : '-'}</td>
@@ -313,11 +331,11 @@ const UserManagement: React.FC = () => {
        </div>
        )}
 
-       {/* بطاقات الموبايل - تصميم نظيف كجهات الاتصال */}
+       {/* بطاقات الموبايل */}
        {!loading && (
         <div className="md:hidden space-y-3">
             {users.map((user, index) => (
-                <div key={user.id} onClick={() => handleOpenModal(user)} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden">
+                <div key={user.id} onClick={() => handleOpenModal(user)} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden ${isSuperAdmin(user) ? 'ring-2 ring-yellow-400/20' : ''}`}>
                      {/* شريط الحالة الملون */}
                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
 
@@ -333,6 +351,7 @@ const UserManagement: React.FC = () => {
                      <div className="flex-1 min-w-0">
                          <h3 className="font-bold text-gray-900 truncate text-sm flex items-center gap-1">
                              {user.name}
+                             {isSuperAdmin(user) && <span className="text-yellow-500"><Icons.Shield /></span>}
                              {user.id === currentUser.id && <span className="text-[8px] bg-gray-100 text-gray-500 px-1 rounded-sm font-normal">أنت</span>}
                          </h3>
                          <div className="flex items-center gap-2 mt-0.5">
@@ -340,13 +359,11 @@ const UserManagement: React.FC = () => {
                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                  user.role === 'admin' ? 'bg-gray-100 text-gray-600' : user.role === 'supervisor' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'
                              }`}>
-                                 {user.role === 'admin' ? 'مدير' : user.role === 'supervisor' ? 'مشرف' : 'مندوب'}
+                                 {isSuperAdmin(user) ? 'Super Admin' : (user.role === 'admin' ? 'مدير' : user.role === 'supervisor' ? 'مشرف' : 'مندوب')}
                              </span>
-                             {user.deviceId && <div className="text-[10px] text-green-600 bg-green-50 px-1 rounded"><Icons.Smartphone /></div>}
                          </div>
                      </div>
 
-                     {/* أيقونة التعديل - واضحة */}
                      <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
                          <Icons.Edit />
                      </div>
@@ -362,7 +379,7 @@ const UserManagement: React.FC = () => {
             <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
                 <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
                     {formData.id ? 'بيانات المستخدم' : 'إضافة عضو جديد'}
-                    {isEditingSelf && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">ملفك الشخصي</span>}
+                    {isTargetSuperAdmin && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><Icons.Shield /> Super Admin</span>}
                 </h3>
                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500"><Icons.X /></button>
             </div>
@@ -376,7 +393,7 @@ const UserManagement: React.FC = () => {
                 )}
 
                 {/* تحذير عند تعديل النفس */}
-                {isEditingSelf && (
+                {isEditingSelf && !isTargetSuperAdmin && (
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-3 items-start text-sm text-blue-800">
                         <Icons.Shield />
                         <div>
@@ -434,7 +451,7 @@ const UserManagement: React.FC = () => {
                         <select 
                             value={formData.role} 
                             onChange={(e) => handleRoleChange(e.target.value)} 
-                            disabled={isEditingSelf || currentUser.role === 'delegate'} 
+                            disabled={isEditingSelf || currentUser.role === 'delegate' || isTargetSuperAdmin} 
                             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-500"
                         >
                             {currentUser.role === 'admin' && <option value="admin">مدير نظام (Admin)</option>}
@@ -463,47 +480,56 @@ const UserManagement: React.FC = () => {
                 <div>
                     <h4 className="font-bold text-sm text-gray-500 mb-2 uppercase border-b pb-1 flex justify-between">
                         <span>صلاحيات الوصول</span>
-                        {isEditingSelf && <span className="text-xs text-red-500 font-normal">(للعرض فقط)</span>}
+                        {isEditingSelf && !isTargetSuperAdmin && <span className="text-xs text-red-500 font-normal">(للعرض فقط)</span>}
                     </h4>
-                    <div className={`border rounded-xl overflow-hidden text-sm mt-3 ${isEditingSelf ? 'opacity-60 pointer-events-none grayscale-[0.5]' : ''}`}>
-                         <table className="w-full text-center">
-                             <thead className="bg-gray-100 text-xs text-gray-600">
-                                 <tr><th className="p-2 text-right">القسم</th>{ACTIONS.map(a => <th key={a.id} className="p-2">{a.label}</th>)}</tr>
-                             </thead>
-                             <tbody>
-                                 {visibleResources.map(res => (
-                                     <tr key={res.id} className="border-t border-gray-50 hover:bg-gray-50">
-                                         <td className="p-2 text-right font-bold text-gray-700 bg-gray-50/50">{res.label}</td>
-                                         {ACTIONS.map(act => {
-                                             if (res.id === 'dashboard' && act.id !== 'view') return <td key={act.id}></td>;
-                                             if (res.id === 'search_odb' && !['view', 'edit'].includes(act.id)) return <td key={act.id}></td>;
+                    
+                    {isTargetSuperAdmin ? (
+                        <div className="bg-yellow-50 text-yellow-800 p-4 rounded-xl text-center border border-yellow-200">
+                            <Icons.Shield />
+                            <h3 className="font-bold mt-2">صلاحيات كاملة تلقائية</h3>
+                            <p className="text-xs mt-1">هذا الحساب يمتلك كافة الصلاحيات بشكل دائم ولا يمكن تقييده.</p>
+                        </div>
+                    ) : (
+                        <div className={`border rounded-xl overflow-hidden text-sm mt-3 ${isEditingSelf ? 'opacity-60 pointer-events-none grayscale-[0.5]' : ''}`}>
+                             <table className="w-full text-center">
+                                 <thead className="bg-gray-100 text-xs text-gray-600">
+                                     <tr><th className="p-2 text-right">القسم</th>{ACTIONS.map(a => <th key={a.id} className="p-2">{a.label}</th>)}</tr>
+                                 </thead>
+                                 <tbody>
+                                     {visibleResources.map(res => (
+                                         <tr key={res.id} className="border-t border-gray-50 hover:bg-gray-50">
+                                             <td className="p-2 text-right font-bold text-gray-700 bg-gray-50/50">{res.label}</td>
+                                             {ACTIONS.map(act => {
+                                                 if (res.id === 'dashboard' && act.id !== 'view') return <td key={act.id}></td>;
+                                                 if (res.id === 'search_odb' && !['view', 'edit'].includes(act.id)) return <td key={act.id}></td>;
 
-                                             const checked = isPermitted(res.id, act.id);
-                                             const disabled = isPermissionDisabled(res.id, act.id);
-                                             return (
-                                                 <td key={act.id} className="p-2 border-l border-gray-50">
-                                                     <input 
-                                                        type="checkbox" 
-                                                        checked={!!checked} 
-                                                        disabled={disabled || isEditingSelf} 
-                                                        onChange={() => togglePermission(res.id, act.id)} 
-                                                        className="w-5 h-5 accent-blue-600 cursor-pointer disabled:opacity-30 rounded focus:ring-0" 
-                                                     />
-                                                 </td>
-                                             )
-                                         })}
-                                     </tr>
-                                 ))}
-                             </tbody>
-                         </table>
-                    </div>
+                                                 const checked = isPermitted(res.id, act.id);
+                                                 const disabled = isPermissionDisabled(res.id, act.id);
+                                                 return (
+                                                     <td key={act.id} className="p-2 border-l border-gray-50">
+                                                         <input 
+                                                            type="checkbox" 
+                                                            checked={!!checked} 
+                                                            disabled={disabled || isEditingSelf} 
+                                                            onChange={() => togglePermission(res.id, act.id)} 
+                                                            className="w-5 h-5 accent-blue-600 cursor-pointer disabled:opacity-30 rounded focus:ring-0" 
+                                                         />
+                                                     </td>
+                                                 )
+                                             })}
+                                         </tr>
+                                     ))}
+                                 </tbody>
+                             </table>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* شريط الأزرار */}
             <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex items-center gap-3">
-                {/* زر الحذف - مخفي إذا كان المستخدم يعدل نفسه */}
-                {formData.id && !isEditingSelf && (
+                {/* زر الحذف */}
+                {formData.id && !isEditingSelf && !isTargetSuperAdmin && (
                     <button 
                         onClick={handleDelete} 
                         className="bg-red-50 text-red-600 w-12 h-12 md:w-auto md:px-4 md:py-2.5 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 border border-red-100"
@@ -514,8 +540,8 @@ const UserManagement: React.FC = () => {
                     </button>
                 )}
 
-                {/* زر الحالة - مخفي إذا كان المستخدم يعدل نفسه */}
-                {formData.id && !isEditingSelf && (
+                {/* زر الحالة */}
+                {formData.id && !isEditingSelf && !isTargetSuperAdmin && (
                     <button 
                         onClick={handleToggleStatus}
                         className={`w-12 h-12 md:w-auto md:px-4 md:py-2.5 md:flex-1 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors border ${formData.isActive ? 'bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100' : 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'}`}
@@ -526,7 +552,7 @@ const UserManagement: React.FC = () => {
                     </button>
                 )}
 
-                {/* زر الحفظ - كبير دائماً */}
+                {/* زر الحفظ */}
                 <button 
                     onClick={handleSave} 
                     disabled={isSaving}
