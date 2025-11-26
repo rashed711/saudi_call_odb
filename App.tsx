@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import ODBTable from './components/ODBTable';
-import NearbyPlaces from './components/NearbyPlaces';
 import Profile from './components/Profile';
 import SiteSettingsComponent from './components/SiteSettings';
 import UserManagement from './components/UserManagement';
@@ -18,6 +17,9 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
   const [siteName, setSiteName] = useState('ODB Manager Pro');
+  
+  // حالة نافذة تأكيد الخروج
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   // 1. Load Settings & Session on Mount
   useEffect(() => {
@@ -60,7 +62,7 @@ const App: React.FC = () => {
                 if (permsChanged || roleChanged) {
                     console.log("Permissions updated remotely");
                     setUser(freshUser);
-                    localStorage.setItem('odb_user_session_v3_perm', JSON.stringify(freshUser));
+                    localStorage.setItem('odb_user_session_v6_final', JSON.stringify(freshUser));
                 }
             }
         } catch (e: any) {
@@ -79,19 +81,22 @@ const App: React.FC = () => {
     // Redirect logic: Priority to Map Filter as requested
     if (hasPermission(u, 'map_filter', 'view')) {
       setCurrentView(View.MAP_FILTER);
-    } else if (hasPermission(u, 'nearby', 'view')) {
-      setCurrentView(View.NEARBY);
     } else {
       setCurrentView(View.DASHBOARD);
     }
   };
 
+  // فتح نافذة التأكيد بدلاً من رسالة المتصفح
   const handleLogout = () => {
-    if (window.confirm('هل تريد تسجيل الخروج؟')) {
-        mockLogout();
-        setUser(null);
-        setCurrentView(View.LOGIN);
-    }
+      setIsLogoutModalOpen(true);
+  };
+
+  // تنفيذ الخروج الفعلي
+  const confirmLogout = () => {
+      mockLogout();
+      setUser(null);
+      setCurrentView(View.LOGIN);
+      setIsLogoutModalOpen(false);
   };
 
   const handleLogoutForce = () => {
@@ -111,8 +116,6 @@ const App: React.FC = () => {
         return can('odb', 'view') ? <ODBTable user={user} /> : <AccessDenied />;
       case View.SEARCH_ODB:
         return can('search_odb', 'view') ? <SearchODB user={user} /> : <AccessDenied />;
-      case View.NEARBY: 
-        return can('nearby', 'view') ? <NearbyPlaces user={user} /> : <AccessDenied />;
       case View.MAP_FILTER:
         return can('map_filter', 'view') ? <MapFilter user={user} /> : <AccessDenied />;
       case View.PROFILE: 
@@ -135,9 +138,6 @@ const App: React.FC = () => {
             {can('search_odb', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} color="blue" title="استعلام ODB" desc="بحث سريع بالكود" />
             )}
-            {can('nearby', 'view') && (
-                <DashboardCard onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} color="purple" title="الأماكن القريبة" desc="قائمة المواقع" />
-            )}
             {can('odb', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SETTINGS_ODB)} icon={<Icons.Database />} color="blue" title="إدارة المواقع" desc="السجل العام" />
             )}
@@ -153,6 +153,9 @@ const App: React.FC = () => {
             {can('settings', 'view') && (
                 <DashboardCard onClick={() => setCurrentView(View.SETTINGS_SITE)} icon={<Icons.Settings />} color="gray" title="النظام" desc="إعدادات التطبيق" />
             )}
+            
+            {/* Added Profile Card - Always Visible */}
+            <DashboardCard onClick={() => setCurrentView(View.PROFILE)} icon={<Icons.User />} color="purple" title="حسابي" desc="الملف الشخصي وكلمة المرور" />
           </div>
         );
     }
@@ -172,7 +175,6 @@ const App: React.FC = () => {
           <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">العمليات</div>
           {can('map_filter', 'view') && <SidebarItem active={currentView === View.MAP_FILTER} onClick={() => setCurrentView(View.MAP_FILTER)} icon={<Icons.Map />} text="الخريطة" />}
           {can('search_odb', 'view') && <SidebarItem active={currentView === View.SEARCH_ODB} onClick={() => setCurrentView(View.SEARCH_ODB)} icon={<Icons.Search />} text="استعلام ODB" />}
-          {can('nearby', 'view') && <SidebarItem active={currentView === View.NEARBY} onClick={() => setCurrentView(View.NEARBY)} icon={<Icons.MapPin />} text="الأماكن القريبة (قائمة)" />}
           {can('my_activity', 'view') && <SidebarItem active={currentView === View.MY_ACTIVITY} onClick={() => setCurrentView(View.MY_ACTIVITY)} icon={<Icons.Check />} text="نشاطي" />}
           
           {(can('users', 'view') || can('settings', 'view') || can('system_logs', 'view')) && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-500 uppercase">الإدارة</div>}
@@ -184,7 +186,7 @@ const App: React.FC = () => {
           <SidebarItem active={currentView === View.PROFILE} onClick={() => setCurrentView(View.PROFILE)} icon={<Icons.User />} text="حسابي" />
         </nav>
         <div className="p-4 border-t border-gray-700/50">
-          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 text-red-400 hover:bg-red-900/20 py-2 rounded-lg">
+          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 text-red-400 hover:bg-red-900/20 py-2 rounded-lg transition-colors">
             <Icons.LogOut /> <span>خروج</span>
           </button>
         </div>
@@ -206,12 +208,11 @@ const App: React.FC = () => {
                 {currentView === View.USERS && 'إدارة الصلاحيات'}
                 {currentView === View.SYSTEM_LOGS && 'سجلات النظام (Logs)'}
                 {currentView === View.SETTINGS_SITE && 'إعدادات الموقع'}
-                {currentView === View.NEARBY && 'الأماكن القريبة'}
                 {currentView === View.PROFILE && 'الملف الشخصي'}
             </div>
             <div className="flex items-center gap-3">
                  <div className="hidden md:block text-sm text-gray-600"><span className="font-bold text-gray-900">{user.name}</span> <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full border">{user.role === 'admin' ? 'مدير' : user.role === 'supervisor' ? 'مشرف' : 'مندوب'}</span></div>
-                 <button onClick={handleLogout} className="md:hidden text-gray-400"><Icons.LogOut /></button>
+                 <button onClick={handleLogout} className="md:hidden text-gray-400 hover:text-red-500"><Icons.LogOut /></button>
             </div>
         </header>
 
@@ -219,11 +220,10 @@ const App: React.FC = () => {
             {renderContent()}
         </div>
 
-        {/* Mobile Bottom Nav - Optimized Fixed Layout */}
+        {/* Mobile Bottom Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] backdrop-blur-lg z-50 pb-[env(safe-area-inset-bottom)]">
             <div className="flex justify-between items-end h-[60px] px-2 relative">
                 
-                {/* Left Side */}
                 <div className="flex-1 flex justify-around">
                      <MobileNavItem 
                         active={currentView === View.DASHBOARD} 
@@ -241,7 +241,6 @@ const App: React.FC = () => {
                     )}
                 </div>
 
-                {/* CENTER MAP BUTTON - Floating Effect */}
                 <div className="relative -top-6 px-2 z-10 shrink-0">
                      {can('map_filter', 'view') ? (
                         <div className="flex flex-col items-center">
@@ -260,21 +259,13 @@ const App: React.FC = () => {
                      )}
                 </div>
 
-                {/* Right Side */}
                 <div className="flex-1 flex justify-around">
-                     {can('my_activity', 'view') ? (
+                     {can('my_activity', 'view') && (
                         <MobileNavItem 
                             active={currentView === View.MY_ACTIVITY} 
                             onClick={() => setCurrentView(View.MY_ACTIVITY)} 
                             icon={<Icons.Check />} 
                             label="نشاطي" 
-                        />
-                    ) : (
-                         <MobileNavItem 
-                            active={currentView === View.NEARBY} 
-                            onClick={() => setCurrentView(View.NEARBY)} 
-                            icon={<Icons.MapPin />} 
-                            label="القريبة" 
                         />
                     )}
 
@@ -297,6 +288,39 @@ const App: React.FC = () => {
             </div>
         </nav>
       </main>
+
+      {/* Logout Confirmation Modal */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="flex flex-col items-center text-center">
+                    <div className="bg-red-50 text-red-500 p-4 rounded-full mb-4 shadow-inner">
+                        <Icons.LogOut />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">تسجيل الخروج</h3>
+                    <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                        هل أنت متأكد أنك تريد تسجيل الخروج من النظام؟
+                    </p>
+                    
+                    <div className="flex gap-3 w-full">
+                        <button 
+                            onClick={() => setIsLogoutModalOpen(false)} 
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors active:scale-95"
+                        >
+                            إلغاء
+                        </button>
+                        <button 
+                            onClick={confirmLogout} 
+                            className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg shadow-red-500/30 transition-all active:scale-95"
+                        >
+                            تأكيد الخروج
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };
